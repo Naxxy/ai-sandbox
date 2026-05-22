@@ -3,6 +3,17 @@
 VERSION="0.1.0"
 SCRIPT_NAME="$(basename "$0")"
 
+_script_real="$0"
+while [[ -L "$_script_real" ]]; do
+  _link_target="$(readlink "$_script_real")"
+  if [[ "$_link_target" != /* ]]; then
+    _link_target="$(dirname "$_script_real")/${_link_target}"
+  fi
+  _script_real="$_link_target"
+done
+SCRIPT_DIR="$(cd "$(dirname "$_script_real")" && pwd)"
+unset _script_real _link_target
+
 # ── Config loading ────────────────────────────────────────────────────────────
 
 CONFIG_FILE=""
@@ -263,6 +274,12 @@ build_docker_cmd() {
     cmd+=(-v "${home_bind_path}:/home/agent:rw")
   else
     cmd+=(-v "ai-sandbox-home-${project_name}:/home/agent")
+  fi
+
+  local claude_settings="${SCRIPT_DIR}/../src/claude-settings.json"
+  if [[ -f "$claude_settings" ]]; then
+    cmd+=(-v "${claude_settings}:/home/agent/.claude/settings.json:ro")
+    echo "[sandbox] claude settings mounted read-only" >&2
   fi
 
   local extra_count i extra_host extra_container extra_ro extra_mode

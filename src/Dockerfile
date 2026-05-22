@@ -47,6 +47,9 @@ RUN groupadd --system docker \
   && useradd --create-home --uid 1000 --shell /usr/local/bin/env-bash agent \
   && usermod -aG docker agent
 
+RUN mkdir -p /home/agent/.claude && chown agent:agent /home/agent/.claude
+COPY --chown=agent:agent src/claude-settings.json /home/agent/.claude/settings.json
+
 ARG VERSION
 LABEL org.opencontainers.image.version="$VERSION"
 

@@ -1,0 +1,44 @@
+{
+  "permissions": {
+    "defaultMode": "bypassPermissions",
+    "allow": [
+      "Read(*)",
+      "Write(*)",
+      "Edit(*)",
+      "MultiEdit(*)",
+      "Glob(*)",
+      "Grep(*)",
+      "LS(*)",
+      "Bash(*)"
+    ],
+    "ask": [
+      "Bash(sudo *)",
+      "Bash(su *)"
+    ],
+    "deny": [
+      "Read(~/.ssh/**)",
+      "Read(~/.gnupg/**)",
+      "Read(~/.aws/**)",
+      "Read(~/.config/gh/**)",
+      "Read(~/.docker/config.json)",
+      "Read(**/.env)",
+      "Read(**/.env.*)",
+
+      "Bash(pass *)",
+      "Bash(gpg *)",
+      "Bash(ssh *)",
+      "Bash(scp *)",
+      "Bash(rsync *:*)",
+      "Bash(curl * | sh*)",
+      "Bash(wget * | sh*)",
+      "Bash(rm -rf / *)",
+      "Bash(rm -rf ~ *)",
+      "Bash(dd *)",
+      "Bash(mkfs*)",
+      "Bash(mount *)"
+    ]
+  },
+  "env": {
+    "CLAUDE_SANDBOX": "true"
+  }
+}
