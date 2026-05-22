@@ -349,11 +349,11 @@ LOCALJSON
 test_extra_mounts() {
   local out
 
-  # Empty extraMounts → only the three standard -v flags (workspace + sandbox.json:ro + home volume)
+  # Empty extraMounts → only the four standard -v flags (workspace + sandbox.json:ro + home + claude-settings:ro)
   out=$(cli_dry | tail -1)
   local v_count
   v_count=$(echo "$out" | grep -o ' -v ' | wc -l)
-  if [[ "$v_count" -eq 3 ]]; then
+  if [[ "$v_count" -eq 4 ]]; then
     pass "6.1 extra-mounts: empty extraMounts produces no extra mounts"
   else
     fail "6.1 extra-mounts: empty extraMounts produces no extra mounts" "got $v_count -v flags: $out"
@@ -641,6 +641,111 @@ test_e2e() {
   fi
 }
 
+test_claude_settings() {
+  local out exit_code settings_file
+  settings_file="$PROJECT_ROOT/src/claude-settings.json"
+
+  if [[ -f "$settings_file" ]]; then
+    pass "claude-settings: src/claude-settings.json exists"
+  else
+    fail "claude-settings: src/claude-settings.json exists" "not found"
+    return
+  fi
+
+  if jq empty "$settings_file" > /dev/null 2>&1; then
+    pass "claude-settings: src/claude-settings.json is valid JSON"
+  else
+    fail "claude-settings: src/claude-settings.json is valid JSON" "jq parse error"
+    return
+  fi
+
+  local default_mode
+  default_mode="$(jq -r '.permissions.defaultMode // empty' "$settings_file")"
+  if [[ "$default_mode" == "bypassPermissions" ]]; then
+    pass "claude-settings: defaultMode is bypassPermissions"
+  else
+    fail "claude-settings: defaultMode is bypassPermissions" "got: $default_mode"
+  fi
+
+  local ask_count
+  ask_count="$(jq '[.permissions.ask[]? | select(test("sudo|su "))] | length' "$settings_file")"
+  if [[ "$ask_count" -ge 2 ]]; then
+    pass "claude-settings: ask list contains sudo and su patterns"
+  else
+    fail "claude-settings: ask list contains sudo and su patterns" "got $ask_count matching entries"
+  fi
+
+  local sudo_in_deny
+  sudo_in_deny="$(jq '[.permissions.deny[]? | select(test("sudo"))] | length' "$settings_file")"
+  if [[ "$sudo_in_deny" -eq 0 ]]; then
+    pass "claude-settings: sudo is not in deny list"
+  else
+    fail "claude-settings: sudo is not in deny list" "found $sudo_in_deny deny entries matching sudo"
+  fi
+
+  local deny_count
+  deny_count="$(jq '.permissions.deny | length' "$settings_file")"
+  if [[ "$deny_count" -ge 10 ]]; then
+    pass "claude-settings: deny list has sufficient entries ($deny_count)"
+  else
+    fail "claude-settings: deny list has sufficient entries" "only $deny_count entries"
+  fi
+
+  out=$(cli_dry | tail -1)
+  if echo "$out" | grep -q "claude-settings\.json:/home/agent/\.claude/settings\.json:ro"; then
+    pass "claude-settings: settings file mounted :ro in dry-run"
+  else
+    fail "claude-settings: settings file mounted :ro in dry-run" "got: $out"
+  fi
+
+  out=$(cli_dry2)
+  if echo "$out" | grep -q "claude settings mounted read-only"; then
+    pass "claude-settings: [sandbox] log message on stderr"
+  else
+    fail "claude-settings: [sandbox] log message on stderr" "got: $out"
+  fi
+
+  out=$("$CLI" --shell -- bash -c "cat /home/agent/.claude/settings.json" 2>/dev/null)
+  if echo "$out" | grep -q "bypassPermissions"; then
+    pass "claude-settings: settings file readable inside container"
+  else
+    fail "claude-settings: settings file readable inside container" "got: $out"
+  fi
+
+  "$CLI" --shell -- bash -c "echo x > /home/agent/.claude/settings.json" > /dev/null 2>&1
+  exit_code=$?
+  if [[ $exit_code -ne 0 ]]; then
+    pass "claude-settings: write blocked by :ro bind mount"
+  else
+    fail "claude-settings: write blocked by :ro bind mount" "write succeeded unexpectedly"
+  fi
+}
+
+test_sudo() {
+  local out
+
+  out=$("$CLI" --shell -- bash -c "which sudo" 2>/dev/null)
+  if echo "$out" | grep -q "/sudo"; then
+    pass "sudo: binary present in container"
+  else
+    fail "sudo: binary present in container" "got: $out"
+  fi
+
+  out=$("$CLI" --shell -- bash -c "sudo whoami" 2>/dev/null)
+  if [[ "$out" == "root" ]]; then
+    pass "sudo: agent can sudo without password (NOPASSWD)"
+  else
+    fail "sudo: agent can sudo without password (NOPASSWD)" "got: $out"
+  fi
+
+  out=$("$CLI" --shell -- bash -c "sudo id -u" 2>/dev/null)
+  if [[ "$out" == "0" ]]; then
+    pass "sudo: sudo id -u returns 0"
+  else
+    fail "sudo: sudo id -u returns 0" "got: $out"
+  fi
+}
+
 main() {
   check_prerequisites
   setup
@@ -659,6 +764,8 @@ main() {
   test_merge_mode
   test_config_readonly
   test_home_mount_bind
+  test_claude_settings
+  test_sudo
   test_e2e
 
   echo ""
