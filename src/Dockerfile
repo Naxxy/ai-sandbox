@@ -23,6 +23,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     python3-pip \
     ripgrep \
+    sudo \
     tree \
     vim \
     wget \
@@ -45,7 +46,9 @@ RUN npm install -g @earendil-works/pi-coding-agent
 
 RUN groupadd --system docker \
   && useradd --create-home --uid 1000 --shell /usr/local/bin/env-bash agent \
-  && usermod -aG docker agent
+  && usermod -aG docker,sudo agent \
+  && printf 'agent ALL=(ALL) NOPASSWD: ALL\n' > /etc/sudoers.d/agent \
+  && chmod 0440 /etc/sudoers.d/agent
 
 RUN mkdir -p /home/agent/.claude && chown agent:agent /home/agent/.claude
 COPY --chown=agent:agent src/claude-settings.json /home/agent/.claude/settings.json
