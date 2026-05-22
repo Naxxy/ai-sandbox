@@ -1,0 +1,9 @@
+{
+  "mergeMode": "append",
+  "allowSharedConfigWrite": true,
+  "sandbox": {
+    "extraMounts": [
+      { "host": "/var/run/docker.sock", "container": "/var/run/docker.sock", "readonly": false }
+    ]
+  }
+}

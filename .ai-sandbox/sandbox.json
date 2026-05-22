@@ -1,0 +1,38 @@
+{
+  "defaultHarness": "shell",
+  "defaultModel": "local-qwen",
+  "harnesses": {
+    "aider": {
+      "command": "aider"
+    },
+    "opencode": {
+      "command": "opencode"
+    },
+    "claude": {
+      "command": "claude"
+    },
+    "pi": {
+      "command": "pi"
+    },
+    "shell": {
+      "command": "bash"
+    }
+  },
+  "models": {
+    "local-qwen": {
+      "provider": "ollama",
+      "model": "qwen3.5:4b",
+      "baseUrl": "http://host.docker.internal:11434"
+    },
+    "openrouter-free": {
+      "provider": "openrouter",
+      "model": "mistralai/mistral-7b-instruct:free"
+    }
+  },
+  "sandbox": {
+    "workspacePath": "/workspace",
+    "readonly": false,
+    "network": true,
+    "extraMounts": []
+  }
+}

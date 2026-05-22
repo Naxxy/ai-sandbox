@@ -1,0 +1,25 @@
+{
+  "name": "ai-sandbox",
+  "image": "ai-sandbox:latest",
+  "remoteUser": "agent",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
+  "workspaceFolder": "/workspace",
+  "mounts": [
+    "source=ai-sandbox-home-${localWorkspaceFolderBasename},target=/home/agent,type=volume",
+    "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind",
+    "source=${localEnv:HOME}/.claude,target=/home/agent/.claude,type=bind",
+    "source=ai-sandbox-vscode-global-storage,target=/home/agent/.vscode-server/data/User/globalStorage,type=volume"
+  ],
+  "initializeCommand": "docker volume create ai-sandbox-vscode-global-storage && docker run --rm -v ai-sandbox-vscode-global-storage:/vol alpine chown 1000:1000 /vol",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "anthropic.claude-code",
+        "continue.continue",
+        "openai.chatgpt",
+        "rooveterinaryinc.roo-cline"
+      ]
+    }
+  },
+  "postCreateCommand": "echo 'ai-sandbox dev container ready for ${localWorkspaceFolder}'"
+}

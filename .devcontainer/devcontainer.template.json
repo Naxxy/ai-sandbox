@@ -1,0 +1,21 @@
+{
+  "name": "ai-sandbox",
+  "image": "ai-sandbox:latest",
+  "remoteUser": "agent",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
+  "workspaceFolder": "/workspace",
+  "mounts": [
+    "source=ai-sandbox-home-${localWorkspaceFolderBasename},target=/home/agent,type=volume"
+  ],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "anthropic.claude-code",
+        "continue.continue",
+        "openai.chatgpt",
+        "rooveterinaryinc.roo-cline"
+      ]
+    }
+  },
+  "postCreateCommand": "echo 'ai-sandbox dev container ready for ${localWorkspaceFolder}'"
+}

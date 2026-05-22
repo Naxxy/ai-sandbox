@@ -1,0 +1,498 @@
+#!/usr/bin/env bash
+
+VERSION="0.1.0"
+SCRIPT_NAME="$(basename "$0")"
+
+# ── Config loading ────────────────────────────────────────────────────────────
+
+CONFIG_FILE=""
+CONFIG_DIR=""
+CONFIG_PROJECT_ROOT=""
+TEMP_CONFIG_FILE=""
+
+find_config() {
+  local dir="$PWD"
+  while [[ "$dir" != "/" ]]; do
+    if [[ -f "$dir/.ai-sandbox/sandbox.json" ]]; then
+      CONFIG_DIR="$dir/.ai-sandbox"
+      CONFIG_PROJECT_ROOT="$dir"
+      return 0
+    fi
+    dir="$(dirname "$dir")"
+  done
+  echo "${SCRIPT_NAME}: No .ai-sandbox/sandbox.json found (searched from $PWD)" >&2
+  exit 1
+}
+
+load_config() {
+  find_config
+
+  local base_file="$CONFIG_DIR/sandbox.json"
+  local local_file="$CONFIG_DIR/sandbox.local.json"
+
+  if ! jq empty "$base_file" 2>/dev/null; then
+    echo "${SCRIPT_NAME}: Invalid JSON in sandbox.json" >&2
+    exit 1
+  fi
+
+  if [[ -f "$local_file" ]]; then
+    if ! jq empty "$local_file" 2>/dev/null; then
+      echo "${SCRIPT_NAME}: Invalid JSON in sandbox.local.json" >&2
+      exit 1
+    fi
+    TEMP_CONFIG_FILE="$(mktemp /tmp/ai-sandbox-config-XXXXXX.json)"
+    if [[ -z "$TEMP_CONFIG_FILE" ]]; then
+      echo "${SCRIPT_NAME}: Failed to create temporary config file" >&2
+      exit 1
+    fi
+    local merge_mode
+    merge_mode="$(jq -r '.mergeMode // "merge"' "$local_file")"
+    case "$merge_mode" in
+      merge)
+        if ! jq -s '.[0] * .[1]' "$base_file" "$local_file" > "$TEMP_CONFIG_FILE"; then
+          echo "${SCRIPT_NAME}: Failed to merge sandbox.json and sandbox.local.json" >&2
+          exit 1
+        fi
+        ;;
+      append)
+        if ! jq -s '
+          def deepmerge_append(a; b):
+            if   a == null then b
+            elif b == null then a
+            elif (a | type) == "array"  and (b | type) == "array"  then a + b
+            elif (a | type) == "object" and (b | type) == "object" then
+              reduce (((a | keys) + (b | keys)) | unique[]) as $k (
+                {}; . + {($k): deepmerge_append(a[$k]; b[$k])}
+              )
+            else b
+            end;
+          .[0] as $base | .[1] as $local | deepmerge_append($base; $local)
+        ' "$base_file" "$local_file" > "$TEMP_CONFIG_FILE"; then
+          echo "${SCRIPT_NAME}: Failed to merge sandbox.json and sandbox.local.json" >&2
+          exit 1
+        fi
+        ;;
+      replace)
+        if ! cp "$local_file" "$TEMP_CONFIG_FILE"; then
+          echo "${SCRIPT_NAME}: Failed to read sandbox.local.json" >&2
+          exit 1
+        fi
+        ;;
+      *)
+        echo "${SCRIPT_NAME}: sandbox.local.json: unknown mergeMode '${merge_mode}' (expected: merge, append, replace)" >&2
+        exit 1
+        ;;
+    esac
+    CONFIG_FILE="$TEMP_CONFIG_FILE"
+  else
+    CONFIG_FILE="$base_file"
+  fi
+
+  CFG_DEFAULT_HARNESS="$(jq -r '.defaultHarness // empty' "$CONFIG_FILE")"
+  CFG_DEFAULT_MODEL="$(jq -r '.defaultModel // empty' "$CONFIG_FILE")"
+  CFG_WORKSPACE_PATH="$(jq -r '.sandbox.workspacePath // "/workspace"' "$CONFIG_FILE")"
+  CFG_READONLY="$(jq -r '.sandbox.readonly // false' "$CONFIG_FILE")"
+  CFG_NETWORK="$(jq -r '.sandbox.network // true' "$CONFIG_FILE")"
+  CFG_HOME_MOUNT="$(jq -r '.sandbox.homeMount // "volume"' "$CONFIG_FILE")"
+
+  if [[ -z "$CFG_DEFAULT_HARNESS" ]]; then
+    echo "${SCRIPT_NAME}: sandbox.json missing required field: defaultHarness" >&2
+    exit 1
+  fi
+  if [[ -z "$CFG_DEFAULT_MODEL" ]]; then
+    echo "${SCRIPT_NAME}: sandbox.json missing required field: defaultModel" >&2
+    exit 1
+  fi
+}
+
+# ── Model / env resolution ────────────────────────────────────────────────────
+
+TEMP_ENV_FILE=""
+DRY_RUN_VARS=()
+
+cleanup() {
+  [[ -n "$TEMP_ENV_FILE"    && -f "$TEMP_ENV_FILE"    ]] && rm -f "$TEMP_ENV_FILE"
+  [[ -n "$TEMP_CONFIG_FILE" && -f "$TEMP_CONFIG_FILE" ]] && rm -f "$TEMP_CONFIG_FILE"
+}
+trap cleanup EXIT
+
+# Write one KEY=VALUE line to the env file and record it for dry-run display.
+# Secrets bypas this and go directly to the file so they never appear in DRY_RUN_VARS.
+_emit_env() {
+  printf '%s\n' "$1" >> "$TEMP_ENV_FILE"
+  DRY_RUN_VARS+=("$1")
+}
+
+resolve_model_env() {
+  local model_key="$1"
+
+  local exists
+  exists="$(jq -r --arg k "$model_key" '.models[$k] // empty' "$CONFIG_FILE")"
+  if [[ -z "$exists" ]]; then
+    echo "${SCRIPT_NAME}: Model '$model_key' not found in sandbox.json" >&2
+    exit 1
+  fi
+
+  local provider model base_url
+  provider="$(jq -r --arg k "$model_key" '.models[$k].provider' "$CONFIG_FILE")"
+  model="$(jq -r --arg k "$model_key" '.models[$k].model' "$CONFIG_FILE")"
+  base_url="$(jq -r --arg k "$model_key" '.models[$k].baseUrl // empty' "$CONFIG_FILE")"
+
+  TEMP_ENV_FILE="$(mktemp /tmp/ai-sandbox-XXXXXX)"
+  if [[ -z "$TEMP_ENV_FILE" ]]; then
+    echo "${SCRIPT_NAME}: Failed to create temporary env file" >&2
+    exit 1
+  fi
+
+  case "$provider" in
+    ollama)
+      local ollama_url="${base_url:-http://host.docker.internal:11434}"
+      _emit_env "OLLAMA_BASE_URL=$ollama_url"
+      _emit_env "MODEL=$model"
+      ;;
+    openrouter)
+      [[ -n "${OPENROUTER_API_KEY:-}" ]] && _emit_env "OPENROUTER_API_KEY=$OPENROUTER_API_KEY"
+      local oai_url="${base_url:-https://openrouter.ai/api/v1}"
+      _emit_env "OPENAI_BASE_URL=$oai_url"
+      _emit_env "MODEL=$model"
+      ;;
+    openai)
+      [[ -n "${OPENAI_API_KEY:-}" ]] && _emit_env "OPENAI_API_KEY=$OPENAI_API_KEY"
+      _emit_env "OPENAI_MODEL=$model"
+      [[ -n "$base_url" ]] && _emit_env "OPENAI_BASE_URL=$base_url"
+      ;;
+    anthropic)
+      [[ -n "${ANTHROPIC_API_KEY:-}" ]] && _emit_env "ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY"
+      _emit_env "ANTHROPIC_MODEL=$model"
+      ;;
+    google)
+      [[ -n "${GOOGLE_API_KEY:-}" ]] && _emit_env "GOOGLE_API_KEY=$GOOGLE_API_KEY"
+      _emit_env "GOOGLE_MODEL=$model"
+      ;;
+    *)
+      echo "${SCRIPT_NAME}: Unknown provider '$provider' for model '$model_key'" >&2
+      exit 1
+      ;;
+  esac
+
+  # .ai-sandbox/env is non-secret: visible in dry-run
+  if [[ -f "$CONFIG_DIR/env" ]]; then
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      [[ -z "$line" || "${line:0:1}" == "#" ]] && continue
+      _emit_env "$line"
+    done < "$CONFIG_DIR/env"
+  fi
+
+  # secrets.env bypasses _emit_env so values never appear in dry-run output
+  [[ -f "$CONFIG_DIR/secrets.env" ]] && cat "$CONFIG_DIR/secrets.env" >> "$TEMP_ENV_FILE"
+}
+
+# ── Kernel security warning ───────────────────────────────────────────────────
+
+emit_kernel_warning() {
+  local kernel_ver
+  kernel_ver="${KERNEL_OVERRIDE:-$(uname -r)}"
+  echo "WARNING: Container sandboxing depends on host kernel security." >&2
+  echo "Ensure your system is patched against recent vulnerabilities (e.g. Copy Fail / CVE-2026-31431)." >&2
+  echo "Kernel: $kernel_ver" >&2
+
+  if [[ "$(uname -s)" == "Linux" ]]; then
+    local major minor
+    major="$(echo "$kernel_ver" | cut -d. -f1)"
+    minor="$(echo "$kernel_ver" | cut -d. -f2 | tr -dc '0-9')"
+    if [[ -n "$major" && -n "$minor" ]] && \
+       { [[ "$major" -lt 6 ]] || [[ "$major" -eq 6 && "$minor" -lt 6 ]]; }; then
+      echo "SECURITY WARNING: kernel may be unpatched against recent container escape vulnerabilities" >&2
+    fi
+  fi
+}
+
+# ── Docker command builder ────────────────────────────────────────────────────
+
+build_docker_cmd() {
+  local harness_cmd="$1"
+  local model_key="$2"
+  local readonly_flag="$3"   # true/false
+  local network_flag="$4"    # true/false
+  local shell_flag="$5"      # true/false
+
+  resolve_model_env "$model_key"
+
+  local mount_opts=":rw"
+  if [[ "$readonly_flag" == "true" ]]; then
+    mount_opts=":ro"
+    echo "[sandbox] workspace mounted read-only" >&2
+  fi
+  [[ "$network_flag" == "false" ]] && echo "[sandbox] network disabled" >&2
+
+  local cmd=(docker run --rm)
+
+  [[ -t 0 ]] && cmd+=(--interactive --tty)
+
+  local project_name container_name
+  project_name="$(basename "$CONFIG_PROJECT_ROOT")"
+  container_name="ai-sandbox-$(printf '%s' "$project_name" | tr -cs 'a-zA-Z0-9_.-' '-')"
+
+  cmd+=(--name "$container_name")
+  cmd+=(-v "${PWD}:${CFG_WORKSPACE_PATH}${mount_opts}")
+
+  # Mount sandbox.json :ro inside the container when it is accessible via the workspace,
+  # preventing any harness from modifying the shared config.
+  local project_real pwd_real
+  project_real="$(cd "$CONFIG_PROJECT_ROOT" && pwd)"
+  pwd_real="$(cd "$PWD" && pwd)"
+  if [[ "$project_real" == "$pwd_real" ]]; then
+    if [[ "$(jq -r '.allowSharedConfigWrite // false' "$CONFIG_FILE")" != "true" ]]; then
+      cmd+=(-v "${CONFIG_DIR}/sandbox.json:${CFG_WORKSPACE_PATH}/.ai-sandbox/sandbox.json:ro")
+      echo "[sandbox] sandbox.json protected read-only" >&2
+    fi
+  fi
+
+  if [[ "$CFG_HOME_MOUNT" == "bind" ]]; then
+    local home_bind_path="${CONFIG_PROJECT_ROOT}/.ai-sandbox/home"
+    if [[ ! -d "$home_bind_path" ]]; then
+      if ! mkdir -p "$home_bind_path"; then
+        echo "${SCRIPT_NAME}: Failed to create ${home_bind_path}" >&2
+        exit 1
+      fi
+      local gitignore="${CONFIG_PROJECT_ROOT}/.gitignore"
+      if [[ -f "$gitignore" ]] && ! grep -qF '.ai-sandbox/home/' "$gitignore"; then
+        printf '.ai-sandbox/home/\n' >> "$gitignore"
+      fi
+    fi
+    cmd+=(-v "${home_bind_path}:/home/agent:rw")
+  else
+    cmd+=(-v "ai-sandbox-home-${project_name}:/home/agent")
+  fi
+
+  local extra_count i extra_host extra_container extra_ro extra_mode
+  extra_count="$(jq -r '(.sandbox.extraMounts // []) | length' "$CONFIG_FILE")"
+  for (( i=0; i<extra_count; i++ )); do
+    extra_host="$(jq -r --argjson i "$i" '.sandbox.extraMounts[$i].host' "$CONFIG_FILE")"
+    extra_container="$(jq -r --argjson i "$i" '.sandbox.extraMounts[$i].container' "$CONFIG_FILE")"
+    extra_ro="$(jq -r --argjson i "$i" 'if .sandbox.extraMounts[$i].readonly == false then "false" else "true" end' "$CONFIG_FILE")"
+    if [[ -z "$extra_host" || "$extra_host" == "null" || -z "$extra_container" || "$extra_container" == "null" ]]; then
+      echo "${SCRIPT_NAME}: extraMounts[$i] missing required 'host' or 'container' field" >&2
+      exit 1
+    fi
+    extra_host="${extra_host/#\~/$HOME}"
+    extra_mode=":ro"
+    [[ "$extra_ro" == "false" ]] && extra_mode=":rw"
+    cmd+=(-v "${extra_host}:${extra_container}${extra_mode}")
+  done
+
+  cmd+=(--env-file "$TEMP_ENV_FILE")
+
+  [[ "$network_flag" == "false" ]] && cmd+=(--network none)
+
+  cmd+=(ai-sandbox:latest)
+
+  DOCKER_CMD=("${cmd[@]}")
+
+  if [[ "$shell_flag" == "true" ]]; then
+    DOCKER_CMD_DEFAULT=(bash)
+  else
+    read -ra harness_args <<< "$harness_cmd"
+    DOCKER_CMD_DEFAULT=("${harness_args[@]}")
+  fi
+}
+
+# ── Help ──────────────────────────────────────────────────────────────────────
+
+show_help() {
+  cat <<EOF
+Usage: ${SCRIPT_NAME} [harness] [options] [-- extra args]
+
+  harness               Override the default harness (must be defined in sandbox.json)
+
+Options:
+  --dry-run             Print the resolved docker command without executing
+  --help, -h            Print this help and exit
+  --model <key>         Override the default model from sandbox.json
+  --no-network          Disable container network access
+  --profile <name>      Apply a sandbox profile from sandbox.json
+  --readonly            Mount /workspace read-only
+  --shell               Override CMD with bash
+  --version             Print version and exit
+
+EOF
+}
+
+# ── Validation helpers ────────────────────────────────────────────────────────
+
+validate_harness() {
+  local key="$1"
+  local exists
+  exists="$(jq -r --arg k "$key" '.harnesses[$k] // empty' "$CONFIG_FILE")"
+  if [[ -z "$exists" ]]; then
+    echo "${SCRIPT_NAME}: Harness '$key' not defined in sandbox.json" >&2
+    exit 1
+  fi
+}
+
+validate_model() {
+  local key="$1"
+  local exists
+  exists="$(jq -r --arg k "$key" '.models[$k] // empty' "$CONFIG_FILE")"
+  if [[ -z "$exists" ]]; then
+    echo "${SCRIPT_NAME}: Model '$key' not defined in sandbox.json" >&2
+    exit 1
+  fi
+}
+
+warn_if_dangerous_mount() {
+  local home_real dir_real
+  home_real="$(cd "$HOME" && pwd)"
+  dir_real="$(cd "$PWD" && pwd)"
+  if [[ "$dir_real" == "$home_real" || "$dir_real" == "/" ]]; then
+    echo "WARNING: You are about to mount a home or root directory into the container. This is potentially unsafe." >&2
+  fi
+  local extra_count i extra_host extra_host_real
+  extra_count="$(jq -r '(.sandbox.extraMounts // []) | length' "$CONFIG_FILE" 2>/dev/null)" || extra_count=0
+  for (( i=0; i<extra_count; i++ )); do
+    extra_host="$(jq -r --argjson i "$i" '.sandbox.extraMounts[$i].host' "$CONFIG_FILE" 2>/dev/null)"
+    [[ -z "$extra_host" || "$extra_host" == "null" ]] && continue
+    extra_host="${extra_host/#\~/$HOME}"
+    if [[ -d "$extra_host" ]]; then
+      extra_host_real="$(cd "$extra_host" && pwd)"
+      if [[ "$extra_host_real" == "$home_real" || "$extra_host_real" == "/" ]]; then
+        echo "WARNING: extraMounts[$i] mounts a home or root directory ($extra_host). This is potentially unsafe." >&2
+      fi
+    fi
+  done
+}
+
+check_plugins() {
+  local plugins
+  plugins="$(jq -r '.plugins | length' "$CONFIG_FILE" 2>/dev/null)" || plugins=0
+  if [[ "$plugins" -gt 0 ]]; then
+    echo "[sandbox] plugin support not yet implemented (ignoring plugins array)" >&2
+  fi
+}
+
+apply_profile() {
+  local profile="$1"
+  local exists
+  exists="$(jq -r --arg p "$profile" '.sandboxProfiles[$p] // empty' "$CONFIG_FILE")"
+  if [[ -z "$exists" ]]; then
+    echo "${SCRIPT_NAME}: Profile '$profile' not defined in sandbox.json" >&2
+    exit 1
+  fi
+  local p_network p_readonly
+  p_network="$(jq -r --arg p "$profile" 'if .sandboxProfiles[$p].network != null then (.sandboxProfiles[$p].network | tostring) else empty end' "$CONFIG_FILE")"
+  p_readonly="$(jq -r --arg p "$profile" 'if .sandboxProfiles[$p].readonly != null then (.sandboxProfiles[$p].readonly | tostring) else empty end' "$CONFIG_FILE")"
+  [[ -n "$p_network" ]] && CFG_NETWORK="$p_network"
+  [[ -n "$p_readonly" ]] && CFG_READONLY="$p_readonly"
+}
+
+# ── Main ──────────────────────────────────────────────────────────────────────
+
+main() {
+  local harness_override=""
+  local model_override=""
+  local readonly_override=""
+  local no_network=false
+  local shell_mode=false
+  local dry_run=false
+  local profile=""
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help)
+        show_help
+        exit 0
+        ;;
+      --dry-run)
+        dry_run=true
+        shift
+        ;;
+      --model)
+        if [[ $# -lt 2 || -z "$2" ]]; then
+          echo "${SCRIPT_NAME}: --model requires an argument" >&2
+          exit 1
+        fi
+        model_override="$2"
+        shift 2
+        ;;
+      --no-network)
+        no_network=true
+        shift
+        ;;
+      --profile)
+        if [[ $# -lt 2 || -z "$2" ]]; then
+          echo "${SCRIPT_NAME}: --profile requires an argument" >&2
+          exit 1
+        fi
+        profile="$2"
+        shift 2
+        ;;
+      --readonly)
+        readonly_override="true"
+        shift
+        ;;
+      --shell)
+        shell_mode=true
+        shift
+        ;;
+      --version)
+        echo "${SCRIPT_NAME} ${VERSION}"
+        exit 0
+        ;;
+      --)
+        shift
+        break
+        ;;
+      -*)
+        echo "${SCRIPT_NAME}: Unknown option: $1" >&2
+        show_help >&2
+        exit 1
+        ;;
+      *)
+        harness_override="$1"
+        shift
+        ;;
+    esac
+  done
+
+  load_config
+  check_plugins
+
+  # Apply profile overrides before flag overrides
+  [[ -n "$profile" ]] && apply_profile "$profile"
+
+  # Resolve harness
+  local harness="${harness_override:-$CFG_DEFAULT_HARNESS}"
+  validate_harness "$harness"
+  local harness_cmd
+  harness_cmd="$(jq -r --arg k "$harness" '.harnesses[$k].command' "$CONFIG_FILE")"
+
+  # Resolve model
+  local model="${model_override:-$CFG_DEFAULT_MODEL}"
+  validate_model "$model"
+
+  local readonly_val="${readonly_override:-$CFG_READONLY}"
+  [[ "$no_network" == "true" ]] && CFG_NETWORK="false"
+
+  warn_if_dangerous_mount
+  emit_kernel_warning
+
+  build_docker_cmd "$harness_cmd" "$model" "$readonly_val" "$CFG_NETWORK" "$shell_mode"
+
+  if [[ $# -gt 0 ]]; then
+    DOCKER_CMD+=("$@")
+  else
+    DOCKER_CMD+=("${DOCKER_CMD_DEFAULT[@]}")
+  fi
+
+  if [[ "$dry_run" == "true" ]]; then
+    for v in "${DRY_RUN_VARS[@]}"; do
+      echo "$v"
+    done
+    echo "${DOCKER_CMD[*]}"
+    exit 0
+  fi
+
+  exec "${DOCKER_CMD[@]}"
+}
+
+main "$@"
