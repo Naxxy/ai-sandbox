@@ -10,6 +10,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
     fd-find \
+    ffmpeg \
+    ffprobe \
     file \
     git \
     htop \
