@@ -5,7 +5,7 @@
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
   "workspaceFolder": "/workspace",
   "mounts": [
-    "source=ai-sandbox-home-${localWorkspaceFolderBasename},target=/home/agent,type=volume"
+    "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
   ],
   "customizations": {
     "vscode": {
@@ -16,6 +16,5 @@
         "rooveterinaryinc.roo-cline"
       ]
     }
-  },
-  "postCreateCommand": "echo 'ai-sandbox dev container ready for ${localWorkspaceFolder}'"
+  }
 }

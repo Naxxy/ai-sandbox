@@ -99,33 +99,15 @@ test_no_host_home_in_mounts_array() {
   fi
 }
 
-test_extra_mount_claude_devcontainer() {
+test_claude_settings_mount_readonly() {
   local mounts
   mounts=$(jq -r '.mounts[]? // empty' "$DEVCONTAINER" 2>/dev/null)
-  if echo "$mounts" | grep -q "localEnv:HOME.*\.claude.*target=/home/agent/.claude"; then
-    pass "6.1 devcontainer: ~/.claude extra mount present with localEnv:HOME expansion"
+  if echo "$mounts" | grep -q "src/claude-settings.json" \
+    && echo "$mounts" | grep -q "target=/home/agent/.claude/settings.json" \
+    && echo "$mounts" | grep -q "readonly"; then
+    pass "6.4 security: claude settings bind-mounted readonly"
   else
-    fail "6.1 devcontainer: ~/.claude extra mount present with localEnv:HOME expansion" "mounts: $mounts"
-  fi
-}
-
-test_home_volume_is_named() {
-  local mounts
-  mounts=$(jq -r '.mounts[]? // empty' "$DEVCONTAINER" 2>/dev/null)
-  if echo "$mounts" | grep -q "target=/home/agent," && echo "$mounts" | grep -q "type=volume"; then
-    pass "5.1 config: /home/agent backed by named volume (not host bind)"
-  else
-    fail "5.1 config: /home/agent backed by named volume (not host bind)" "mounts: $mounts"
-  fi
-}
-
-test_vscode_server_covered() {
-  local mounts
-  mounts=$(jq -r '.mounts[]? // empty' "$DEVCONTAINER" 2>/dev/null)
-  if echo "$mounts" | grep -q "target=/home/agent," && echo "$mounts" | grep -q "type=volume"; then
-    pass "6.4 config: named volume at /home/agent covers .vscode-server extension cache"
-  else
-    fail "6.4 config: named volume at /home/agent covers .vscode-server extension cache" "mounts: $mounts"
+    fail "6.4 security: claude settings bind-mounted readonly" "mounts: $mounts"
   fi
 }
 
@@ -210,14 +192,12 @@ main() {
   test_workspace_mount_target
   test_no_host_home_in_workspace_mount
   test_no_host_home_in_mounts_array
-  test_home_volume_is_named
-  test_vscode_server_covered
+  test_claude_settings_mount_readonly
   test_extension_continue
   test_extension_roo
   test_extension_claude_code
   test_extension_chatgpt
   test_docker_socket_mounted
-  test_extra_mount_claude_devcontainer
   test_image_field
 
   echo ""

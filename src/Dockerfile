@@ -50,7 +50,8 @@ RUN groupadd --system docker \
   && chmod 0440 /etc/sudoers.d/agent
 
 RUN mkdir -p /home/agent/.claude && chown agent:agent /home/agent/.claude
-COPY --chown=agent:agent src/claude-settings.json /home/agent/.claude/settings.json
+COPY src/claude-settings.json /home/agent/.claude/settings.json
+RUN chmod 444 /home/agent/.claude/settings.json
 
 ARG VERSION
 LABEL org.opencontainers.image.version="$VERSION"
