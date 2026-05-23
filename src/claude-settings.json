@@ -24,6 +24,9 @@
       "Read(**/.env)",
       "Read(**/.env.*)",
 
+      "Write(/home/agent/.claude/settings.json)",
+      "Edit(/home/agent/.claude/settings.json)",
+
       "Bash(pass *)",
       "Bash(gpg *)",
       "Bash(ssh *)",
