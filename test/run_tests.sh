@@ -248,13 +248,13 @@ test_kernel_warning() {
     fail "4.3 kernel: WARNING appears on every invocation" "count=$count"
   fi
 
-  if [[ -f "$PROJECT_ROOT/SECURITY.md" ]]; then
+  if [[ -f "$PROJECT_ROOT/docs/SECURITY.md" ]]; then
     pass "4.3 kernel: SECURITY.md exists"
   else
     fail "4.3 kernel: SECURITY.md exists" "file not found"
   fi
 
-  if grep -qi "copy fail" "$PROJECT_ROOT/SECURITY.md"; then
+  if grep -qi "copy fail" "$PROJECT_ROOT/docs/SECURITY.md"; then
     pass "4.3 kernel: SECURITY.md documents Copy Fail"
   else
     fail "4.3 kernel: SECURITY.md documents Copy Fail" "string not found"
