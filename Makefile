@@ -7,19 +7,13 @@ DOCKERFILE_HASH := $(shell (sha256sum src/Dockerfile 2>/dev/null || shasum -a 25
 .PHONY: build clean rebuild version
 
 build:
-	@if docker image inspect $(IMAGE):$(DOCKERFILE_HASH) >/dev/null 2>&1; then \
-		echo "Image $(IMAGE):$(DOCKERFILE_HASH) is current; retagging as latest"; \
-		docker tag $(IMAGE):$(DOCKERFILE_HASH) $(IMAGE):latest; \
-	else \
-		echo "Building $(IMAGE):$(DOCKERFILE_HASH)"; \
-		docker build --build-arg VERSION=$(DOCKERFILE_HASH) -f src/Dockerfile -t $(IMAGE):$(DOCKERFILE_HASH) -t $(IMAGE):latest .; \
-	fi
+	docker build --progress=plain --build-arg VERSION=$(DOCKERFILE_HASH) -f src/Dockerfile -t $(IMAGE):$(DOCKERFILE_HASH) -t $(IMAGE):latest .
 
 clean:
 	docker rmi $(IMAGE):$(DOCKERFILE_HASH) $(IMAGE):latest 2>/dev/null || true
 
 rebuild:
-	docker build --build-arg VERSION=$(DOCKERFILE_HASH) -f src/Dockerfile -t $(IMAGE):$(DOCKERFILE_HASH) -t $(IMAGE):latest .
+	docker build --progress=plain --build-arg VERSION=$(DOCKERFILE_HASH) -f src/Dockerfile -t $(IMAGE):$(DOCKERFILE_HASH) -t $(IMAGE):latest .
 
 version:
 	@echo $(DOCKERFILE_HASH)
