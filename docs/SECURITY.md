@@ -44,7 +44,8 @@ On Linux, if the running kernel predates the 6.6 LTS baseline, an additional war
 The `.devcontainer/devcontainer.json` provides the same isolation guarantees as the CLI:
 
 - Only `${localWorkspaceFolder}` is bind-mounted into the container, at `/workspace`
-- `$HOME`, `~/.ssh`, `~/.aws`, and all other host paths are structurally absent — there is no mount for them
+- `$HOME`, `~/.ssh`, `~/.aws`, and all other host paths are structurally absent — there is no bind-mount for them
+- `/home/agent` is backed by a named Docker volume (`ai-sandbox-devcontainer-home`); this persists Claude Code credentials and VS Code extension auth across rebuilds without touching the host filesystem
 - `/home/agent/.claude/settings.json` is bind-mounted read-only from `src/claude-settings.json` — Claude Code cannot modify its own permission rules at runtime
 - The container runs as `agent` (UID 1000), not root
 - The Roo Code and Continue extensions, and the integrated terminal, all operate within this boundary

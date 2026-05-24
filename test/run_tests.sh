@@ -349,14 +349,16 @@ LOCALJSON
 test_extra_mounts() {
   local out
 
-  # Empty extraMounts → only the four standard -v flags (workspace + sandbox.json:ro + home + claude-settings:ro)
+  # Empty extraMounts → baseline -v flags: workspace + sandbox.json:ro + home + claude-settings:ro [+ credentials:ro if present]
   out=$(cli_dry | tail -1)
-  local v_count
+  local v_count expected_v
   v_count=$(echo "$out" | grep -o ' -v ' | wc -l)
-  if [[ "$v_count" -eq 4 ]]; then
+  expected_v=4
+  [[ -f "${HOME}/.claude/.credentials.json" ]] && expected_v=5
+  if [[ "$v_count" -eq "$expected_v" ]]; then
     pass "6.1 extra-mounts: empty extraMounts produces no extra mounts"
   else
-    fail "6.1 extra-mounts: empty extraMounts produces no extra mounts" "got $v_count -v flags: $out"
+    fail "6.1 extra-mounts: empty extraMounts produces no extra mounts" "got $v_count -v flags (expected $expected_v): $out"
   fi
 
   # readonly:true → :ro
@@ -746,6 +748,44 @@ test_sudo() {
   fi
 }
 
+test_credentials() {
+  local creds_file="${HOME}/.claude/.credentials.json"
+
+  if [[ ! -f "$creds_file" ]]; then
+    return
+  fi
+
+  local out exit_code
+  out=$(cli_dry | tail -1)
+  if echo "$out" | grep -q "\.credentials\.json:/home/agent/\.claude/\.credentials\.json:ro"; then
+    pass "credentials: file mounted :ro in dry-run"
+  else
+    fail "credentials: file mounted :ro in dry-run" "got: $out"
+  fi
+
+  out=$(cli_dry2)
+  if echo "$out" | grep -q "claude credentials mounted read-only"; then
+    pass "credentials: [sandbox] log message on stderr"
+  else
+    fail "credentials: [sandbox] log message on stderr" "got: $out"
+  fi
+
+  out=$("$CLI" --shell -- bash -c "test -s /home/agent/.claude/.credentials.json && echo ok" 2>/dev/null)
+  if [[ "$out" == "ok" ]]; then
+    pass "credentials: file present and non-empty inside container"
+  else
+    fail "credentials: file present and non-empty inside container" "got: $out"
+  fi
+
+  "$CLI" --shell -- bash -c "echo x > /home/agent/.claude/.credentials.json" > /dev/null 2>&1
+  exit_code=$?
+  if [[ $exit_code -ne 0 ]]; then
+    pass "credentials: write blocked by :ro bind mount"
+  else
+    fail "credentials: write blocked by :ro bind mount" "write succeeded unexpectedly"
+  fi
+}
+
 main() {
   check_prerequisites
   setup
@@ -765,6 +805,7 @@ main() {
   test_config_readonly
   test_home_mount_bind
   test_claude_settings
+  test_credentials
   test_sudo
   test_e2e
 

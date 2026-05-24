@@ -282,6 +282,12 @@ build_docker_cmd() {
     echo "[sandbox] claude settings mounted read-only" >&2
   fi
 
+  local claude_creds="${HOME}/.claude/.credentials.json"
+  if [[ -f "$claude_creds" ]]; then
+    cmd+=(-v "${claude_creds}:/home/agent/.claude/.credentials.json:ro")
+    echo "[sandbox] claude credentials mounted read-only" >&2
+  fi
+
   local extra_count i extra_host extra_container extra_ro extra_mode
   extra_count="$(jq -r '(.sandbox.extraMounts // []) | length' "$CONFIG_FILE")"
   for (( i=0; i<extra_count; i++ )); do

@@ -397,6 +397,7 @@ The repo ships with `.devcontainer/devcontainer.json`, which lets VS Code open y
 | Roo Code extension | Installed automatically; runs inside the container |
 | Continue extension | Installed automatically; runs inside the container |
 | File access | Only the project you opened in VS Code (`/workspace`); your host home, `~/.ssh`, `~/.aws` are not mounted |
+| Auth persistence | `~/.claude/.credentials.json` and VS Code extension auth survive container rebuilds via a named Docker volume on `/home/agent`; log in once, never again |
 
 ### Prerequisites
 
@@ -430,7 +431,7 @@ your-project/
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
   "workspaceFolder": "/workspace",
   "mounts": [
-    "source=ai-sandbox-home,target=/home/agent,type=volume"
+    "source=<project>-devcontainer-home,target=/home/agent,type=volume"
   ],
   "customizations": {
     "vscode": {
@@ -442,6 +443,8 @@ your-project/
   }
 }
 ```
+
+Replace `<project>` with your project name. The named volume on `/home/agent` persists Claude Code credentials (`~/.claude/.credentials.json`) and VS Code extension auth across container rebuilds — you only need to run `claude auth login` once inside the container.
 
 Then open the project in VS Code and choose **Reopen in Container**.
 

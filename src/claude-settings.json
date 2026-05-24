@@ -24,6 +24,8 @@
       "Read(**/.env)",
       "Read(**/.env.*)",
 
+      "Read(~/.claude/.credentials.json)",
+      "Read(/home/agent/.claude/.credentials.json)",
       "Write(/home/agent/.claude/settings.json)",
       "Edit(/home/agent/.claude/settings.json)",
 

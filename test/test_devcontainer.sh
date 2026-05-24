@@ -111,6 +111,18 @@ test_claude_settings_mount_readonly() {
   fi
 }
 
+test_credentials_mount_readonly() {
+  local mounts
+  mounts=$(jq -r '.mounts[]? // empty' "$DEVCONTAINER" 2>/dev/null)
+  if echo "$mounts" | grep -q "localEnv:HOME.*\.credentials\.json" \
+    && echo "$mounts" | grep -q "target=/home/agent/.claude/.credentials.json" \
+    && echo "$mounts" | grep -q "readonly"; then
+    pass "6.4 security: claude credentials bind-mounted readonly"
+  else
+    fail "6.4 security: claude credentials bind-mounted readonly" "mounts: $mounts"
+  fi
+}
+
 test_extension_continue() {
   local found
   found=$(jq -r '.customizations.vscode.extensions[]? // empty' "$DEVCONTAINER" | grep -c "continue.continue")
@@ -181,6 +193,17 @@ test_image_field() {
   fi
 }
 
+test_agent_home_volume_mount() {
+  local mounts home_mount
+  mounts=$(jq -r '.mounts[]? // empty' "$DEVCONTAINER" 2>/dev/null)
+  home_mount=$(echo "$mounts" | grep "target=/home/agent[^/]")
+  if echo "$home_mount" | grep -q "type=volume"; then
+    pass "6.4 persistence: named volume mounted at /home/agent"
+  else
+    fail "6.4 persistence: named volume mounted at /home/agent" "no volume-type mount targeting /home/agent found; mounts: $mounts"
+  fi
+}
+
 main() {
   check_prerequisites
 
@@ -193,12 +216,14 @@ main() {
   test_no_host_home_in_workspace_mount
   test_no_host_home_in_mounts_array
   test_claude_settings_mount_readonly
+  test_credentials_mount_readonly
   test_extension_continue
   test_extension_roo
   test_extension_claude_code
   test_extension_chatgpt
   test_docker_socket_mounted
   test_image_field
+  test_agent_home_volume_mount
 
   echo ""
   echo "Results: $PASS passed, $FAIL failed"
