@@ -49,7 +49,8 @@ RUN groupadd --system docker \
   && printf 'agent ALL=(ALL) NOPASSWD: ALL\n' > /etc/sudoers.d/agent \
   && chmod 0440 /etc/sudoers.d/agent
 
-RUN mkdir -p /home/agent/.claude && chown agent:agent /home/agent/.claude
+RUN mkdir -p /home/agent/.claude /home/agent/.codex \
+  && chown agent:agent /home/agent/.claude /home/agent/.codex
 COPY src/claude-settings.json /home/agent/.claude/settings.json
 RUN chmod 444 /home/agent/.claude/settings.json
 

@@ -349,12 +349,13 @@ LOCALJSON
 test_extra_mounts() {
   local out
 
-  # Empty extraMounts → baseline -v flags: workspace + sandbox.json:ro + home + claude-settings:ro [+ credentials:ro if present]
+  # Empty extraMounts → baseline -v flags: workspace + sandbox.json:ro + home + claude-settings:ro [+ optional credential mounts]
   out=$(cli_dry | tail -1)
   local v_count expected_v
   v_count=$(echo "$out" | grep -o ' -v ' | wc -l)
   expected_v=4
-  [[ -f "${HOME}/.claude/.credentials.json" ]] && expected_v=5
+  [[ -f "${HOME}/.claude/.credentials.json" ]] && expected_v=$((expected_v + 1))
+  [[ -f "${HOME}/.codex/auth.json" ]] && expected_v=$((expected_v + 1))
   if [[ "$v_count" -eq "$expected_v" ]]; then
     pass "6.1 extra-mounts: empty extraMounts produces no extra mounts"
   else
@@ -786,6 +787,44 @@ test_credentials() {
   fi
 }
 
+test_codex_auth() {
+  local auth_file="${HOME}/.codex/auth.json"
+
+  if [[ ! -f "$auth_file" ]]; then
+    return
+  fi
+
+  local out exit_code
+  out=$(cli_dry | tail -1)
+  if echo "$out" | grep -q "auth\.json:/home/agent/\.codex/auth\.json:ro"; then
+    pass "codex-auth: file mounted :ro in dry-run"
+  else
+    fail "codex-auth: file mounted :ro in dry-run" "got: $out"
+  fi
+
+  out=$(cli_dry2)
+  if echo "$out" | grep -q "codex auth mounted read-only"; then
+    pass "codex-auth: [sandbox] log message on stderr"
+  else
+    fail "codex-auth: [sandbox] log message on stderr" "got: $out"
+  fi
+
+  out=$("$CLI" --shell -- bash -c "test -s /home/agent/.codex/auth.json && echo ok" 2>/dev/null)
+  if [[ "$out" == "ok" ]]; then
+    pass "codex-auth: file present and non-empty inside container"
+  else
+    fail "codex-auth: file present and non-empty inside container" "got: $out"
+  fi
+
+  "$CLI" --shell -- bash -c "echo x > /home/agent/.codex/auth.json" > /dev/null 2>&1
+  exit_code=$?
+  if [[ $exit_code -ne 0 ]]; then
+    pass "codex-auth: write blocked by :ro bind mount"
+  else
+    fail "codex-auth: write blocked by :ro bind mount" "write succeeded unexpectedly"
+  fi
+}
+
 main() {
   check_prerequisites
   setup
@@ -806,6 +845,7 @@ main() {
   test_home_mount_bind
   test_claude_settings
   test_credentials
+  test_codex_auth
   test_sudo
   test_e2e
 

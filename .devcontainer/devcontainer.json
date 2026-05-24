@@ -7,6 +7,7 @@
   "mounts": [
     "source=${localWorkspaceFolderBasename}-devcontainer-home,target=/home/agent,type=volume",
     "source=ai-sandbox-shared-claude,target=/home/agent/.claude,type=volume",
+    "source=ai-sandbox-shared-codex,target=/home/agent/.codex,type=volume",
     "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind",
     "source=${localWorkspaceFolder}/src/claude-settings.json,target=/home/agent/.claude/settings.json,type=bind,readonly"
   ],

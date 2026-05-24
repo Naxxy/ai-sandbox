@@ -193,6 +193,17 @@ test_agent_home_volume_mount() {
   fi
 }
 
+test_codex_volume_mount() {
+  local mounts
+  mounts=$(jq -r '.mounts[]? // empty' "$DEVCONTAINER" 2>/dev/null)
+  if echo "$mounts" | grep -q "target=/home/agent/.codex" \
+    && echo "$mounts" | grep "target=/home/agent/.codex" | grep -q "type=volume"; then
+    pass "codex-auth: ai-sandbox-shared-codex volume mounted at /home/agent/.codex"
+  else
+    fail "codex-auth: ai-sandbox-shared-codex volume mounted at /home/agent/.codex" "mounts: $mounts"
+  fi
+}
+
 main() {
   check_prerequisites
 
@@ -212,6 +223,7 @@ main() {
   test_docker_socket_mounted
   test_image_field
   test_agent_home_volume_mount
+  test_codex_volume_mount
 
   echo ""
   echo "Results: $PASS passed, $FAIL failed"

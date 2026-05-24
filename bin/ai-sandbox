@@ -288,6 +288,12 @@ build_docker_cmd() {
     echo "[sandbox] claude credentials mounted read-only" >&2
   fi
 
+  local codex_auth="${HOME}/.codex/auth.json"
+  if [[ -f "$codex_auth" ]]; then
+    cmd+=(-v "${codex_auth}:/home/agent/.codex/auth.json:ro")
+    echo "[sandbox] codex auth mounted read-only" >&2
+  fi
+
   local extra_count i extra_host extra_container extra_ro extra_mode
   extra_count="$(jq -r '(.sandbox.extraMounts // []) | length' "$CONFIG_FILE")"
   for (( i=0; i<extra_count; i++ )); do

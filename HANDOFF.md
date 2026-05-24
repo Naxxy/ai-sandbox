@@ -271,3 +271,91 @@ jq '.mounts' .devcontainer/devcontainer.template.json
 Should show four entries: per-workspace home volume, shared claude volume, docker socket, and claude-settings (readonly). The template and `devcontainer.json` mounts sections should be identical. No credential bind mounts should appear.
 
 Do not mark this complete based on the code existing alone — only on the validation commands passing.
+
+---
+
+## If validation shows the shared volume approach is needed
+
+Run `VALIDATE.md` first to determine whether Codex uses expiring OAuth tokens that require write-back. If it does, the devcontainer needs a shared named volume (same pattern as `ai-sandbox-shared-claude`). The CLI bind mount may also need removing if access token lifetime is shorter than a typical harness session.
+
+### Rollback — removing the CLI bind mount
+
+Only do this if Step 2 or Step 3 of `VALIDATE.md` shows that Codex writes refreshed tokens back to `auth.json` and the token lifetime is short enough to expire mid-session. If the token outlives typical CLI sessions, the `:ro` mount is safe and this rollback is not needed.
+
+**`bin/ai-sandbox`** — remove the codex block added in Change 1:
+
+```bash
+local codex_auth="${HOME}/.codex/auth.json"
+if [[ -f "$codex_auth" ]]; then
+  cmd+=(-v "${codex_auth}:/home/agent/.codex/auth.json:ro")
+  echo "[sandbox] codex auth mounted read-only" >&2
+fi
+```
+
+**`src/claude-settings.json`** — keep the deny entries even after removing the bind mount. They are harmless when the file is absent and act as forward protection if the mount is ever re-added:
+
+```json
+"Read(~/.codex/auth.json)",
+"Read(/home/agent/.codex/auth.json)",
+```
+
+**`test/run_tests.sh`** — remove the `test_codex_auth` function, remove its call from `main()`, and remove the codex line from the mount count:
+
+```bash
+[[ -f "${HOME}/.codex/auth.json" ]] && expected_v=$((expected_v + 1))
+```
+
+Revert the comment back to:
+
+```bash
+# Empty extraMounts → baseline -v flags: workspace + sandbox.json:ro + home + claude-settings:ro [+ credentials:ro if present]
+```
+
+### Shared volume path — devcontainer
+
+Add a named volume for Codex auth nested under the workspace home volume. Docker's specificity rule makes `/home/agent/.codex` resolve from the shared volume while the rest of `/home/agent` comes from the per-workspace volume — same mechanism as `ai-sandbox-shared-claude`.
+
+**`.devcontainer/devcontainer.json` and `.devcontainer/devcontainer.template.json`** — add after the `ai-sandbox-shared-claude` entry:
+
+```json
+"source=ai-sandbox-shared-codex,target=/home/agent/.codex,type=volume",
+```
+
+Mounts array becomes 5 entries (order matters — more specific paths must follow less specific ones):
+
+```json
+"source=${localWorkspaceFolderBasename}-devcontainer-home,target=/home/agent,type=volume",
+"source=ai-sandbox-shared-claude,target=/home/agent/.claude,type=volume",
+"source=ai-sandbox-shared-codex,target=/home/agent/.codex,type=volume",
+"source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind",
+"source=${localWorkspaceFolder}/src/claude-settings.json,target=/home/agent/.claude/settings.json,type=bind,readonly"
+```
+
+**`test/test_devcontainer.sh`** — add a test function immediately before `main()` and call it from `main()` after `test_agent_home_volume_mount`:
+
+```bash
+test_codex_volume_mount() {
+  local mounts
+  mounts=$(jq -r '.mounts[]? // empty' "$DEVCONTAINER" 2>/dev/null)
+  if echo "$mounts" | grep -q "target=/home/agent/.codex" \
+    && echo "$mounts" | grep "target=/home/agent/.codex" | grep -q "type=volume"; then
+    pass "codex-auth: ai-sandbox-shared-codex volume mounted at /home/agent/.codex"
+  else
+    fail "codex-auth: ai-sandbox-shared-codex volume mounted at /home/agent/.codex" "mounts: $mounts"
+  fi
+}
+```
+
+Also update `test_no_host_home_in_mounts_array` to verify no bind-mount of `~/.codex` crept in — the existing regex already blocks bare home paths, but confirm the codex volume entry passes the security check.
+
+**First-time setup:** On first container open (or after `docker volume rm ai-sandbox-shared-codex`), Codex will prompt for login if it has an interactive auth flow. If it requires an API key entry, the user configures it once inside the container and it persists in the named volume across rebuilds.
+
+**Validation after implementing the shared volume:**
+
+```bash
+bash test/test_devcontainer.sh
+jq '.mounts' .devcontainer/devcontainer.json
+jq '.mounts' .devcontainer/devcontainer.template.json
+```
+
+Both `jq` outputs must be identical and show exactly 5 entries. `test_devcontainer.sh` must end with `0 failed`.
