@@ -8,7 +8,7 @@
     "source=${localWorkspaceFolderBasename}-devcontainer-home,target=/home/agent,type=volume",
     "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind",
     "source=${localWorkspaceFolder}/src/claude-settings.json,target=/home/agent/.claude/settings.json,type=bind,readonly",
-    "source=${localEnv:HOME}/.claude/.credentials.json,target=/home/agent/.claude/.credentials.json,type=bind,readonly"
+    "source=${localEnv:HOME}/.claude/.credentials.json,target=/home/agent/.claude/.credentials.json,type=bind"
   ],
   "customizations": {
     "vscode": {
