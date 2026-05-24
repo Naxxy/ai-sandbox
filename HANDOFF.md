@@ -2,7 +2,7 @@
 
 ## Goal
 
-Mount `~/.codex/auth.json` read-only into every sandbox context so the Codex harness can authenticate without re-entering credentials. This mirrors exactly what was already done for `~/.claude/.credentials.json`.
+Mount `~/.codex/auth.json` read-only into the CLI sandbox context so the Codex harness can authenticate without re-entering credentials. This mirrors what was done for `~/.claude/.credentials.json` in `bin/ai-sandbox`.
 
 ---
 
@@ -21,7 +21,7 @@ Both launch paths are independent and must each be updated. The CLI change and t
 
 ## Reference implementation — what was done for `~/.claude/.credentials.json`
 
-Use this as the exact model to follow.
+Use this as the **exact model** for the CLI path. The devcontainer path is intentionally different — read the note below before following this for devcontainer changes.
 
 ### 1. `bin/ai-sandbox`
 
@@ -39,18 +39,26 @@ Rules that apply (from CLAUDE.md):
 - No `set -euo pipefail` — use explicit `[[ -f ... ]]` guards.
 - Use `echo` for stderr diagnostic messages (not `printf`).
 - The mount is a no-op if the file doesn't exist on the host.
+- `:ro` is intentional — CLI harnesses are short-lived; they read the access token at startup but never perform OAuth token refresh. Read-only is safe for them.
 
 ### 2. `.devcontainer/devcontainer.json`
 
-This line was added to the `mounts` array:
+**No credentials bind mount.** The devcontainer deliberately does NOT bind-mount `~/.claude/.credentials.json` from the host.
+
+**Why:** OAuth refresh tokens are single-use (or have a short reuse window). The host machine and the devcontainer each run their own Claude Code instance. If they share the same credentials file, whichever instance refreshes the token first revokes the refresh token the other holds in memory. The other instance then fails mid-task with a 401 and shows the login screen. Making the mount read-write does not fix this — it just changes which side loses the refresh race. Full investigation in `docs/CLAUDE_AUTH.md`.
+
+**The right model:** The `mounts` array uses two volumes:
 
 ```json
-"source=${localEnv:HOME}/.claude/.credentials.json,target=/home/agent/.claude/.credentials.json,type=bind"
+"source=${localWorkspaceFolderBasename}-devcontainer-home,target=/home/agent,type=volume",
+"source=ai-sandbox-shared-claude,target=/home/agent/.claude,type=volume"
 ```
 
-`${localEnv:HOME}` is the VS Code devcontainer variable that resolves to the host `$HOME` at container startup.
+- The per-workspace volume (`${localWorkspaceFolderBasename}-devcontainer-home`) isolates shell state, harness config, and IDE lock files between simultaneously open workspaces.
+- The shared volume (`ai-sandbox-shared-claude`) mounts at `/home/agent/.claude` and is shared across all workspaces. Claude Code stores and refreshes its OAuth session here. One login persists across all workspaces and survives rebuilds.
+- Docker resolves nested mounts by specificity: the `.claude` volume shadows the `.claude/` directory inside the workspace volume; the `settings.json` bind mount (listed after) shadows `settings.json` inside the shared Claude volume.
 
-**Important:** The devcontainer mount is read-write (no `readonly`). Claude Code's OAuth session refresh writes updated tokens back to `~/.claude/.credentials.json`. A read-only mount silently breaks token refresh and forces re-login on every container rebuild. The CLI mount in `bin/ai-sandbox` is still `:ro` — harnesses don't perform OAuth refresh, they only read credentials at startup.
+The first time a workspace opens against a fresh `ai-sandbox-shared-claude` volume, the Claude Code extension prompts for login. VS Code handles the OAuth browser redirect automatically for devcontainers.
 
 ### 3. `src/claude-settings.json`
 
@@ -116,28 +124,15 @@ test_credentials() {
 }
 ```
 
-### 6. `test/test_devcontainer.sh` — `test_credentials_mount_present()` function
+### 6. `test/test_devcontainer.sh`
 
-Added after `test_claude_settings_mount_readonly()` and called from `main()` immediately after it. Note the name and check: the devcontainer credentials mount is read-write, so this test only verifies presence of the mount, not that `readonly` is set.
-
-```bash
-test_credentials_mount_present() {
-  local mounts
-  mounts=$(jq -r '.mounts[]? // empty' "$DEVCONTAINER" 2>/dev/null)
-  if echo "$mounts" | grep -q "localEnv:HOME.*\.credentials\.json" \
-    && echo "$mounts" | grep -q "target=/home/agent/.claude/.credentials.json"; then
-    pass "6.4 security: claude credentials bind-mounted into container"
-  else
-    fail "6.4 security: claude credentials bind-mounted into container" "mounts: $mounts"
-  fi
-}
-```
+No credentials test exists in `test_devcontainer.sh`. The devcontainer deliberately has no credentials bind mount (see reference section 2 above), so there is nothing to validate here.
 
 ---
 
 ## Work to implement — `~/.codex/auth.json`
 
-Implement all six changes below, following the reference implementation above exactly. Run the validation commands at the end before declaring done.
+Implement all changes below. The codex auth work follows the same split as claude credentials: CLI gets a `:ro` bind mount; devcontainer does NOT bind-mount credentials. Run the validation commands at the end before declaring done.
 
 ### Change 1 — `bin/ai-sandbox`
 
@@ -157,35 +152,19 @@ Note: `/home/agent/.codex/` does not exist in the image. Docker creates the pare
 
 ### Change 2 — `.devcontainer/devcontainer.json`
 
-**Where:** The `mounts` array (currently 4 entries, listed below). Append as the last entry.
+**No change needed.** The devcontainer does not bind-mount session credentials. If the Codex VS Code extension (if one exists) needs its own auth, it authenticates independently and stores credentials in the named volume — exactly like Claude Code does.
 
-Current entries:
+Current mounts (4 entries — do not add a codex entry):
 ```json
 "source=${localWorkspaceFolderBasename}-devcontainer-home,target=/home/agent,type=volume",
+"source=ai-sandbox-shared-claude,target=/home/agent/.claude,type=volume",
 "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind",
-"source=${localWorkspaceFolder}/src/claude-settings.json,target=/home/agent/.claude/settings.json,type=bind,readonly",
-"source=${localEnv:HOME}/.claude/.credentials.json,target=/home/agent/.claude/.credentials.json,type=bind"
+"source=${localWorkspaceFolder}/src/claude-settings.json,target=/home/agent/.claude/settings.json,type=bind,readonly"
 ```
-
-**What to add** (5th entry):
-
-```json
-"source=${localEnv:HOME}/.codex/auth.json,target=/home/agent/.codex/auth.json,type=bind"
-```
-
-Note: No `readonly` — VS Code extensions that use OAuth may need to write back refreshed tokens (same reason as the Claude credentials mount).
 
 ### Change 3 — `.devcontainer/devcontainer.template.json`
 
-**Where:** The `mounts` array (currently 4 entries, identical to `devcontainer.json` above). Append as the 5th entry.
-
-**What to add:**
-
-```json
-"source=${localEnv:HOME}/.codex/auth.json,target=/home/agent/.codex/auth.json,type=bind"
-```
-
-The template and `devcontainer.json` have identical mounts sections — keep them in sync. No `readonly` for the same reason as Change 2.
+**No change needed.** Template and `devcontainer.json` mounts are identical (same 4 entries). Neither has credential bind mounts.
 
 ### Change 4 — `src/claude-settings.json`
 
@@ -268,24 +247,9 @@ test_codex_auth() {
 }
 ```
 
-### Change 7 — `test/test_devcontainer.sh` — `test_codex_auth_mount_present()` function
+### Change 7 — `test/test_devcontainer.sh`
 
-**Where:** Add immediately after `test_credentials_mount_present()`. Call it from `main()` immediately after `test_credentials_mount_present`.
-
-```bash
-test_codex_auth_mount_present() {
-  local mounts
-  mounts=$(jq -r '.mounts[]? // empty' "$DEVCONTAINER" 2>/dev/null)
-  if echo "$mounts" | grep -q "localEnv:HOME.*auth\.json" \
-    && echo "$mounts" | grep -q "target=/home/agent/.codex/auth.json"; then
-    pass "6.4 security: codex auth bind-mounted into container"
-  else
-    fail "6.4 security: codex auth bind-mounted into container" "mounts: $mounts"
-  fi
-}
-```
-
-Note: `test_devcontainer.sh` only validates `.devcontainer/devcontainer.json`, not the template file. The template change (Change 3) has no corresponding automated test — verify it by reading the file after editing.
+**No change needed.** The devcontainer does not bind-mount codex auth (same design as claude credentials — see Change 2). Do not add a `test_codex_auth_mount_present` function. There is nothing to test in `test_devcontainer.sh` for this feature.
 
 ---
 
@@ -304,6 +268,6 @@ To verify the devcontainer template manually:
 ```bash
 jq '.mounts' .devcontainer/devcontainer.template.json
 ```
-Should show five entries: home volume, docker socket, claude-settings, claude-credentials, and codex auth. The template and `devcontainer.json` mounts sections should be identical.
+Should show four entries: per-workspace home volume, shared claude volume, docker socket, and claude-settings (readonly). The template and `devcontainer.json` mounts sections should be identical. No credential bind mounts should appear.
 
 Do not mark this complete based on the code existing alone — only on the validation commands passing.
