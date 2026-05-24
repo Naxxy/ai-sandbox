@@ -1,5 +1,6 @@
 {
   "name": "ai-sandbox",
+  "runArgs": ["--name", "ai-sandbox-${localWorkspaceFolderBasename}"],
   "image": "ai-sandbox:latest",
   "remoteUser": "agent",
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
