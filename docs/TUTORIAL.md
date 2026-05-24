@@ -375,13 +375,15 @@ Prints the env vars that will be injected (excluding secrets) and the full `dock
 
 ## 9. Persistent agent home
 
-The container's `/home/agent` directory is backed by a Docker named volume (`ai-sandbox-home`). Tool installs, caches, and agent configurations survive across runs without touching your host home directory.
+The container's `/home/agent` directory is backed by a per-project Docker named volume (`ai-sandbox-home-<project>`). Tool installs, caches, and agent configurations survive across runs without touching your host home directory.
 
 To reset it:
 
 ```bash
-docker volume rm ai-sandbox-home
+docker volume rm ai-sandbox-home-<project>
 ```
+
+Replace `<project>` with the basename of your project directory (e.g. `ai-sandbox-home-my-project`).
 
 ---
 
@@ -397,7 +399,7 @@ The repo ships with `.devcontainer/devcontainer.json`, which lets VS Code open y
 | Roo Code extension | Installed automatically; runs inside the container |
 | Continue extension | Installed automatically; runs inside the container |
 | File access | Only the project you opened in VS Code (`/workspace`); your host home, `~/.ssh`, `~/.aws` are not mounted |
-| Auth persistence | `~/.claude/.credentials.json` and VS Code extension auth survive container rebuilds via a named Docker volume on `/home/agent`; log in once, never again |
+| Auth persistence | Claude and Codex auth live in shared named volumes (`ai-sandbox-shared-claude`, `ai-sandbox-shared-codex`) shared across all workspaces — log in once per service, persists across rebuilds |
 
 ### Prerequisites
 
@@ -415,7 +417,7 @@ The `.devcontainer/devcontainer.json` in this repo points at `src/Dockerfile` an
 
 ### Using the dev container in another project
 
-For a project you want to sandbox, copy the devcontainer config and point it at the pre-built image instead of the Dockerfile:
+For a project you want to sandbox, copy `.devcontainer/devcontainer.template.json` from this repo as `.devcontainer/devcontainer.json` in your project:
 
 ```
 your-project/
@@ -423,20 +425,28 @@ your-project/
     └── devcontainer.json
 ```
 
+The template uses `${localWorkspaceFolderBasename}` to name the per-workspace home volume automatically, and shares auth volumes across all workspaces:
+
 ```json
 {
   "name": "ai-sandbox",
+  "runArgs": ["--name", "ai-sandbox-${localWorkspaceFolderBasename}"],
   "image": "ai-sandbox:latest",
   "remoteUser": "agent",
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
   "workspaceFolder": "/workspace",
   "mounts": [
-    "source=<project>-devcontainer-home,target=/home/agent,type=volume"
+    "source=${localWorkspaceFolderBasename}-devcontainer-home,target=/home/agent,type=volume",
+    "source=ai-sandbox-shared-claude,target=/home/agent/.claude,type=volume",
+    "source=ai-sandbox-shared-codex,target=/home/agent/.codex,type=volume",
+    "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
   ],
   "customizations": {
     "vscode": {
       "extensions": [
+        "anthropic.claude-code",
         "continue.continue",
+        "openai.chatgpt",
         "rooveterinaryinc.roo-cline"
       ]
     }
@@ -444,7 +454,7 @@ your-project/
 }
 ```
 
-Replace `<project>` with your project name. The named volume on `/home/agent` persists Claude Code credentials (`~/.claude/.credentials.json`) and VS Code extension auth across container rebuilds — you only need to run `claude auth login` once inside the container.
+The `ai-sandbox-shared-claude` and `ai-sandbox-shared-codex` volumes are shared across all workspaces. Log in to Claude Code and Codex once inside any container and auth persists across all projects and rebuilds. Each workspace gets its own isolated home volume for everything else (shell state, harness config, VS Code extension binaries).
 
 Then open the project in VS Code and choose **Reopen in Container**.
 

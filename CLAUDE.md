@@ -12,10 +12,11 @@ Use this table to know which file to open first for a given task.
 
 | Task | File |
 |---|---|
-| Understand requirements, user stories, acceptance criteria | `docs/PRD.md` |
-| See completed steps and validation records | `docs/CHANGELOG.md` |
-| Resume from a previous session — current step, status table, bugs fixed | `docs/SCRATCHPAD.md` |
+| Understand what the project is, key features, security model, risks | `docs/PRD.md` |
+| See completed steps, validation records, key decisions, bugs fixed | `docs/CHANGELOG.md` |
 | Learn how to use the tool — harnesses, models, merge modes, mounts, security | `docs/TUTORIAL.md` |
+| Understand devcontainer auth design — what was tried, why it failed, current approach | `docs/CLAUDE_AUTH.md` |
+| Read the security threat model and Copy Fail / kernel limitations | `docs/SECURITY.md` |
 | Read or modify CLI logic (flag parsing, docker assembly, env resolution, security checks) | `bin/ai-sandbox` |
 | Understand container environment: base image, installed tools, user setup | `src/Dockerfile` |
 | Build or rebuild the Docker image (`make build`) | `Makefile` |

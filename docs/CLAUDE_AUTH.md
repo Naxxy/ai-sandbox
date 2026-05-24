@@ -64,11 +64,12 @@ This is not a file-permissions problem. It is a fundamental incompatibility betw
 
 ## Current approach
 
-Two volumes, nested:
+Three volumes plus a bind mount, nested by path specificity:
 
 ```json
 "source=${localWorkspaceFolderBasename}-devcontainer-home,target=/home/agent,type=volume",
-"source=ai-sandbox-shared-claude,target=/home/agent/.claude,type=volume"
+"source=ai-sandbox-shared-claude,target=/home/agent/.claude,type=volume",
+"source=ai-sandbox-shared-codex,target=/home/agent/.codex,type=volume"
 ```
 
 Additionally, the per-workspace settings file is bind-mounted on top:
@@ -81,17 +82,31 @@ Additionally, the per-workspace settings file is bind-mounted on top:
 
 | Path | Source |
 |---|---|
-| `/home/agent/**` (except `.claude`) | `${localWorkspaceFolderBasename}-devcontainer-home` — per-workspace, isolated |
+| `/home/agent/**` (except `.claude`, `.codex`) | `${localWorkspaceFolderBasename}-devcontainer-home` — per-workspace, isolated |
 | `/home/agent/.claude/**` (except `settings.json`) | `ai-sandbox-shared-claude` — shared across all workspaces |
 | `/home/agent/.claude/settings.json` | bind mount from `src/claude-settings.json` — per-workspace |
+| `/home/agent/.codex/**` | `ai-sandbox-shared-codex` — shared across all workspaces |
 
 **Result:**
 - Workspace home directories are isolated. Simultaneous sessions do not conflict on shell state, harness config, or IDE lock files.
 - The Claude session lives exclusively in `ai-sandbox-shared-claude`. One login persists across all workspaces and survives container rebuilds.
-- The host's Claude session is completely unaffected. The container's OAuth refresh cycle writes to its own volume, not to the host's `~/.claude/`.
+- The Codex session lives exclusively in `ai-sandbox-shared-codex`. Same persistence guarantee.
+- The host's Claude and Codex sessions are completely unaffected. Each container's OAuth refresh cycle writes to its own volume.
 - Each workspace gets its own tool-permission settings via the bind mount.
 
 **First-time setup:** On first container open (or after `docker volume rm ai-sandbox-shared-claude`), the Claude Code extension prompts for login. VS Code handles the OAuth browser redirect automatically for devcontainers — no manual port forwarding required.
+
+---
+
+## Codex auth — same pattern, same constraints
+
+`~/.codex/auth.json` follows the same design as Claude credentials.
+
+**Devcontainer:** The `ai-sandbox-shared-codex` volume mounts at `/home/agent/.codex` and is shared across all workspaces. Log in once inside any container; auth persists across rebuilds. The `ai-sandbox-shared-codex` volume root directory must be owned by `agent:agent` — the `src/Dockerfile` creates `/home/agent/.codex` with the correct ownership so fresh volumes initialise correctly.
+
+**CLI (`bin/ai-sandbox`):** `~/.codex/auth.json` is bind-mounted `:ro` from the host when the file exists. CLI harness sessions are short-lived and do not perform token refresh, so read-only is safe. If Codex ever begins writing refreshed tokens at startup (detectable by watching `auth.json` mtime during a session), the `:ro` mount should be removed and the CLI should rely on a pre-authenticated volume instead.
+
+**The OAuth refresh conflict from Attempt 2 applies here too:** if `auth.json` contains OAuth tokens, sharing the file read-write between the host Codex process and a container would cause the same refresh-token revocation race. The shared named volume sidesteps this because the container has its own independent session, not a clone of the host's.
 
 ---
 
@@ -108,6 +123,7 @@ In practice, two workspaces running active Claude Code tasks simultaneously is r
 | File | Role |
 |---|---|
 | `.devcontainer/devcontainer.json` | Devcontainer config for this project |
-| `.devcontainer/devcontainer.template.json` | Template for user projects — kept identical to `devcontainer.json` on mounts |
-| `src/claude-settings.json` | Per-workspace Claude tool permissions, bind-mounted read-only |
-| `bin/ai-sandbox` | CLI path — mounts `.credentials.json` `:ro` for short-lived harness sessions (no refresh needed) |
+| `.devcontainer/devcontainer.template.json` | Template for user projects — mounts kept identical to `devcontainer.json` |
+| `src/claude-settings.json` | Per-workspace Claude tool permissions, bind-mounted read-only; deny entries block AI from reading auth files |
+| `src/Dockerfile` | Creates `/home/agent/.claude` and `/home/agent/.codex` with `agent:agent` ownership so fresh named volumes initialise with correct permissions |
+| `bin/ai-sandbox` | CLI path — mounts `.credentials.json` and `auth.json` `:ro` for short-lived harness sessions |

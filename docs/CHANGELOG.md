@@ -594,3 +594,31 @@ If `$PWD` is a subdirectory of `CONFIG_PROJECT_ROOT` (e.g. running `ai-sandbox` 
 | No `$HOME` mount | `docker inspect <cid>` → Mounts array has only `/workspace` + named volume |
 | No `~/.ssh` mount | Same inspect |
 | Named volume for `/home/agent` | `docker volume ls` → `ai-sandbox-home` listed |
+
+---
+
+## Key Decisions
+
+- `debian:bookworm-slim` over Chainguard Wolfi — all required apt packages available; Wolfi had gaps
+- `fd-find` package symlinked to `/usr/local/bin/fd` — Debian package name differs from binary name
+- `agent` user UID 1000 via `useradd --create-home` — non-root; named volume covers `/home/agent`
+- `--` args **replace** the container CMD (not append) — `--shell -- whoami` → `docker run ... whoami`; default CMD stored in `DOCKER_CMD_DEFAULT`
+- `DRY_RUN_VARS` array + `_emit_env()` helper: model/env vars visible in `--dry-run`; `secrets.env` bypasses and never appears in stdout
+- No `set -euo pipefail` — explicit error checking throughout; documented in `CLAUDE.md`
+- Case flag arms sorted lexicographically in `bin/ai-sandbox`
+
+---
+
+## Bugs Fixed (initial implementation, 2026-05-05)
+
+| Bug | Fix |
+|---|---|
+| `cmd+=($harness_cmd)` unquoted glob-split | `read -ra harness_args <<< "$harness_cmd"; cmd+=("${harness_args[@]}")` |
+| `mktemp` result unchecked | Explicit empty-check + `exit 1` |
+| `${2:?'msg'}` leaks literal quotes into error | Replaced with `[[ $# -lt 2 \|\| -z "$2" ]]` + `exit 1` |
+| `realpath` not portable to macOS | Replaced with `cd "$dir" && pwd` |
+| `emit_kernel_warning` arithmetic on empty vars | Guard `[[ -n "$major" && -n "$minor" ]]` before comparison |
+| `show_help` wrote to stderr | Removed `>&2`; `--help` goes to stdout; error path passes `>&2` at call site |
+| `--` args appended to CMD (broke `--shell -- whoami`) | `--` args now replace CMD; default CMD stored in `DOCKER_CMD_DEFAULT` |
+| `--dry-run` showed opaque `--env-file /tmp/...` | Added `DRY_RUN_VARS`; env vars printed before docker command |
+| `apply_profile` silently ignored `false` values | `false // empty` → `empty` in jq; fixed with `if .field != null then (.field \| tostring) else empty end` |
