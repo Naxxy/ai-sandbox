@@ -5,6 +5,12 @@
 
 ---
 
+## Remove "continue" VS Code extension from devcontainer template *(2026-05-25)*
+
+Removed the `Continue` extension (`continue.continue`) from `.devcontainer/devcontainer.template.json`. The sandbox ships with Claude Code and Roo-Cline; Continue was redundant and added unnecessary surface area to the dev container.
+
+---
+
 ## Devcontainer template fixes *(2026-05-25)*
 
 Two fixes to `.devcontainer/devcontainer.template.json` (and kept in sync with `devcontainer.json`):

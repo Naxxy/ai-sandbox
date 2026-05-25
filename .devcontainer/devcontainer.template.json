@@ -16,7 +16,6 @@
     "vscode": {
       "extensions": [
         "anthropic.claude-code",
-        "continue.continue",
         "openai.chatgpt",
         "rooveterinaryinc.roo-cline"
       ]
