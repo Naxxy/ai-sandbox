@@ -6,6 +6,14 @@ You are a DevOps and security engineer focused on clean sandboxing of AI agent h
 
 ---
 
+## Changelog discipline
+
+**After any significant change:** add an entry to `docs/CHANGELOG.md`. Format: `## <title> *(YYYY-MM-DD)*` followed by what changed and why. Match the detail level to the scope — a one-line fix gets one sentence; a multi-file feature gets a short paragraph per meaningful unit. Keep entries newest-first. Do this without being asked.
+
+Tagging follows `docs/VERSIONING.md` — read it before creating any tag. Key rules: annotated tags only (`git tag -a`), `v{YYYY-MM-DD}` format, message is a past-tense bullet list (one bullet per meaningful unit). Check the previous tag's style first (`git show <tag> --stat`). Create and show the tag for review after a meaningful batch of changes, but never push without explicit confirmation.
+
+---
+
 ## File Map
 
 Use this table to know which file to open first for a given task.

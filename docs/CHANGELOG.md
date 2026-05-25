@@ -5,6 +5,24 @@
 
 ---
 
+## Expand tagging guidance in CLAUDE.md *(2026-05-25)*
+
+Fleshed out the tagging note in the `Changelog discipline` section to explicitly reference `docs/VERSIONING.md` as the authoritative guide. Added the key rules inline — annotated tags only, `v{YYYY-MM-DD}` format, past-tense bullet message, check previous tag style before writing a new one — so the instruction is actionable without having to open the doc every time.
+
+---
+
+## Add changelog discipline rule to CLAUDE.md *(2026-05-25)*
+
+Added a `Changelog discipline` section to `CLAUDE.md` instructing Claude to update `docs/CHANGELOG.md` after every significant change without being asked. Also references `docs/VERSIONING.md` for tagging conventions. Ensures changelog and tag hygiene are maintained automatically across sessions.
+
+---
+
+## Add README.md *(2026-05-25)*
+
+Created `README.md` for GitHub. Covers what the project is and why it exists, quick-start steps (build image → add `.ai-sandbox/sandbox.json` → run), key CLI flags, supported providers, VS Code devcontainer summary, security model overview, and a reference table linking to all docs in `docs/`. Starts with a `Version: YYYY-MM-DD` stamp matching the current tag convention from `docs/VERSIONING.md`.
+
+---
+
 ## Add versioning conventions doc *(2026-05-25)*
 
 Added `docs/VERSIONING.md`: documents the project's date-based annotated tag convention (`v{YYYY-MM-DD}`), the required tag message format (past-tense bullet list, one bullet per meaningful unit), the four-step tagging process (check previous tag → create → review → push explicitly), and a quick-reference command block. Lightweight tags are explicitly disallowed.
