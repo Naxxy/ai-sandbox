@@ -5,6 +5,12 @@
 
 ---
 
+## Add versioning conventions doc *(2026-05-25)*
+
+Added `docs/VERSIONING.md`: documents the project's date-based annotated tag convention (`v{YYYY-MM-DD}`), the required tag message format (past-tense bullet list, one bullet per meaningful unit), the four-step tagging process (check previous tag → create → review → push explicitly), and a quick-reference command block. Lightweight tags are explicitly disallowed.
+
+---
+
 ## Remove "continue" VS Code extension from devcontainer template *(2026-05-25)*
 
 Removed the `Continue` extension (`continue.continue`) from `.devcontainer/devcontainer.template.json`. The sandbox ships with Claude Code and Roo-Cline; Continue was redundant and added unnecessary surface area to the dev container.
