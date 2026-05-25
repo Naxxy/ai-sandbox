@@ -41,6 +41,9 @@ RUN printf '%s\n' '#!/usr/bin/env bash' 'exec bash "$@"' > /usr/local/bin/env-ba
 # fd-find installs as 'fdfind'; symlink to 'fd' for ergonomics
 RUN ln -s /usr/bin/fdfind /usr/local/bin/fd
 
+RUN wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 \
+  && chmod +x /usr/local/bin/yq
+
 RUN npm install -g @earendil-works/pi-coding-agent
 
 RUN groupadd --system docker \

@@ -5,6 +5,12 @@
 
 ---
 
+## Add yq to Dockerfile *(2026-05-25)*
+
+Installed `yq` (mikefarah/yq) in `src/Dockerfile` via binary download from the GitHub releases page. Downloaded as `yq_linux_amd64` into `/usr/local/bin/yq` and made executable. This approach works without additional dependencies since `wget` is already present in the image.
+
+---
+
 ## Expand tagging guidance in CLAUDE.md *(2026-05-25)*
 
 Fleshed out the tagging note in the `Changelog discipline` section to explicitly reference `docs/VERSIONING.md` as the authoritative guide. Added the key rules inline — annotated tags only, `v{YYYY-MM-DD}` format, past-tense bullet message, check previous tag style before writing a new one — so the instruction is actionable without having to open the doc every time.
