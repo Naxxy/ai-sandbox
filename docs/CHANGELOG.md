@@ -5,6 +5,110 @@
 
 ---
 
+## Devcontainer template fixes *(2026-05-25)*
+
+Two fixes to `.devcontainer/devcontainer.template.json` (and kept in sync with `devcontainer.json`):
+
+**Container naming** (`e129b10`): added `runArgs: ["--name", "ai-sandbox-${localWorkspaceFolderBasename}"]` so every devcontainer gets a deterministic, workspace-scoped Docker container name. Prevents name collisions when multiple workspaces use the template simultaneously.
+
+**Settings mount path** (`18f57cb`): the `claude-settings.json` mount source was changed from `${localWorkspaceFolder}/src/claude-settings.json` (workspace-relative — only works inside the ai-sandbox repo itself) to `${localEnv:HOME}/.ai-agents/ai-sandbox/src/claude-settings.json` (host-absolute — works in any project using the template).
+
+---
+
+## Codex shared auth volume *(2026-05-25)*
+
+Codex harness credentials are now available inside both the CLI sandbox and the dev container without exposing host credential files directly.
+
+**CLI (`bin/ai-sandbox`):** mounts `~/.codex/auth.json` read-only (`/home/agent/.codex/auth.json:ro`) when the file exists on the host. Mount is conditional — no error if absent.
+
+**Devcontainer:** uses a named Docker volume `ai-sandbox-shared-codex` mounted at `/home/agent/.codex`. Same pattern as `ai-sandbox-shared-claude` — volume is shared across all workspaces; first open prompts for auth, subsequent opens reuse the stored session. Avoids credential bind-mounts that would expose the host filesystem.
+
+**Dockerfile:** pre-creates `/home/agent/.codex` with correct ownership so the volume mount works without a root step at runtime.
+
+**`src/claude-settings.json`:** denies `Read(~/.codex/auth.json)` and `Read(/home/agent/.codex/auth.json)` — the AI inside the container cannot read the credentials file.
+
+**Test coverage:**
+- `test/run_tests.sh`: `test_codex_auth()` — dry-run shows `:ro` mount, stderr log message present, file present and non-empty inside container, writes blocked
+- `test/test_devcontainer.sh`: `test_codex_volume_mount()` — verifies `ai-sandbox-shared-codex` volume at correct target path
+
+---
+
+## Shared Claude auth volume *(2026-05-24)*
+
+Replaced the earlier `~/.claude/.credentials.json` bind-mount approach with a named Docker volume (`ai-sandbox-shared-claude`) mounted at `/home/agent/.claude`.
+
+**Problem with bind-mounting:** OAuth refresh tokens are single-use (short reuse window). When both the host and devcontainer run Claude Code simultaneously, whichever instance refreshes the token first invalidates what the other holds in memory — the other fails mid-task with a 401. Making the mount read-write doesn't fix this; it changes which side loses the race. Full analysis in `docs/CLAUDE_AUTH.md`.
+
+**Mount layering (current state):**
+```
+${localWorkspaceFolderBasename}-devcontainer-home  →  /home/agent          (per-workspace volume)
+ai-sandbox-shared-claude                           →  /home/agent/.claude  (shared across workspaces)
+src/claude-settings.json (bind, readonly)          →  /home/agent/.claude/settings.json
+```
+Docker's specificity rule resolves the three layers: the shared `.claude` volume shadows the `.claude/` directory inside the workspace home volume; the `settings.json` bind-mount (more specific path) shadows `settings.json` inside the shared Claude volume. One Claude Code login persists across all workspaces and survives container rebuilds.
+
+The home volume was also parameterized from `ai-sandbox-devcontainer-home` (static) to `${localWorkspaceFolderBasename}-devcontainer-home` so simultaneously-open workspaces each get an isolated home.
+
+---
+
+## Sandboxing architecture overhaul *(2026-05-23)*
+
+Replaced the previous multi-volume devcontainer approach with a simpler, more secure design. Removed:
+- Per-project named home volume `ai-sandbox-home-${localWorkspaceFolderBasename}` (replaced by workspace-scoped `…-devcontainer-home`)
+- `ai-sandbox-vscode-global-storage` volume and its `initializeCommand` (`docker volume create … && docker run … chown`)
+- Whole `~/.claude` bind-mount (`source=${localEnv:HOME}/.claude`)
+- `postCreateCommand`
+
+Added: `src/claude-settings.json` bind-mounted read-only at `/home/agent/.claude/settings.json` — gives the AI a policy file without exposing the host's entire `.claude` directory.
+
+**`src/Dockerfile`:** settings file baked into the image as a read-only fallback (`chmod 444`). The bind-mount at runtime takes precedence; the baked copy acts as a safe default when the CLI is used without the devcontainer.
+
+**`test/test_devcontainer.sh`:** replaced `test_home_volume_is_named`, `test_vscode_server_covered`, and `test_extra_mount_claude_devcontainer` with `test_claude_settings_mount_readonly()` — verifies the settings file is bind-mounted and marked `readonly`.
+
+---
+
+## Claude settings policy file *(2026-05-22–23)*
+
+Added `src/claude-settings.json`: a Claude Code permissions policy that ships with the image and is injected into every sandbox session.
+
+**Policy highlights:**
+- `defaultMode: bypassPermissions` — Claude operates without per-tool prompts inside the container
+- `allow`: all Read/Write/Edit/Bash operations within the workspace
+- `ask`: `sudo *`, `su *`
+- `deny`: credential paths (`~/.ssh/**`, `~/.aws/**`, `~/.gnupg/**`, `~/.docker/config.json`, `**/.env`), destructive commands (`rm -rf /`, `dd`, `mkfs*`, `mount`), pipe-to-shell patterns (`curl * | sh`, `wget * | sh`), and `pass`/`gpg`/`ssh`/`scp`
+- `env.CLAUDE_SANDBOX=true` — harness code can detect it is running inside the sandbox
+
+**CLI (`bin/ai-sandbox`):** resolves the script's real path through symlinks (`SCRIPT_DIR`) and mounts `${SCRIPT_DIR}/../src/claude-settings.json` read-only into every container. Prints `[sandbox] claude settings mounted read-only` to stderr.
+
+**Deny-write protection** (`d73bace`): added `Write(/home/agent/.claude/settings.json)` and `Edit(/home/agent/.claude/settings.json)` to the `deny` list — the AI cannot overwrite its own policy file even though the rest of `/home/agent` is writable.
+
+---
+
+## sudo access for agent user *(2026-05-22)*
+
+Added passwordless `sudo` for the `agent` user inside the container:
+
+**`src/Dockerfile`:**
+- `sudo` added to `apt-get install`
+- `agent` added to the `sudo` group alongside `docker`
+- `/etc/sudoers.d/agent` created with `agent ALL=(ALL) NOPASSWD: ALL` (mode `0440`)
+
+This allows `--shell` sessions and harness commands to run `sudo` without a password prompt. `sudo *` and `su *` are listed in the `ask` deny list in `claude-settings.json` so Claude Code still prompts before escalating.
+
+---
+
+## ffmpeg/ffprobe added to image *(2026-05-22–23)*
+
+`ffmpeg` added to the `apt-get install` layer in `src/Dockerfile`. The `ffprobe` binary is included in the `ffmpeg` Debian package — a separate `ffprobe` package does not exist and was removed in a follow-up commit.
+
+---
+
+## Makefile: always use `--progress=plain` *(2026-05-23)*
+
+`make build` and `make rebuild` now always pass `--progress=plain` to `docker build`. Removed the stale content-hash skip-rebuild optimisation (it compared a Dockerfile hash against existing image tags but was unreliable with layer-cache hits). Builds now always run and always emit plain-text log output, which is easier to follow in CI and terminal sessions.
+
+---
+
 ## Pi coding agent harness *(2026-05-13)*
 
 `pi` (`@earendil-works/pi-coding-agent`) is now baked into the image and registered as a harness.
