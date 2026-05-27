@@ -5,6 +5,23 @@
 
 ---
 
+## Alias file support *(2026-05-27)*
+
+Added `.ai-sandbox/aliases.sh` as a committed, editable file for shell aliases. The CLI now detects this file and mounts it `:ro` into the container at `/home/agent/.bash_aliases`. Debian's default `~/.bashrc` (from `/etc/skel`) already sources `~/.bash_aliases` when it exists, so no Dockerfile changes were needed. The initial entry is `alias ll='ls -al'`. Add further aliases to `.ai-sandbox/aliases.sh` to extend sandbox behaviour.
+
+---
+
+## Docs cleanup and test rename *(2026-05-25)*
+
+Consolidated docs and enforced consistent naming across the repo:
+
+- Renamed `test/run_tests.sh` → `test/test_cli.sh` to match `test/test_devcontainer.sh` — both names now describe what they test.
+- Merged `docs/CLAUDE_AUTH.md` and `VALIDATE.md` into `docs/AGENTS_AUTH.md`. The new file covers all agents (Claude, Codex, and any future additions), integrates the credential-validation steps as a dedicated section, and replaces the two narrower files.
+- Moved `HANDOFF.md` and `VALIDATE.md` from the repo root into `docs/` where documentation belongs.
+- Updated `CLAUDE.md` file map and repo layout, and `README.md` docs table, to reflect all renames.
+
+---
+
 ## Add yq to Dockerfile *(2026-05-25)*
 
 Installed `yq` (mikefarah/yq) in `src/Dockerfile` via binary download from the GitHub releases page. Downloaded as `yq_linux_amd64` into `/usr/local/bin/yq` and made executable. This approach works without additional dependencies since `wget` is already present in the image.

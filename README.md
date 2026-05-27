@@ -130,7 +130,7 @@ Structurally enforced invariants:
 |---|---|
 | [`docs/TUTORIAL.md`](docs/TUTORIAL.md) | Full usage guide — config, harnesses, models, flags, devcontainer |
 | [`docs/SECURITY.md`](docs/SECURITY.md) | Threat model, kernel limitations, Copy Fail / CVE-2026-31431 |
-| [`docs/CLAUDE_AUTH.md`](docs/CLAUDE_AUTH.md) | Devcontainer auth design — what was tried, why it failed, current approach |
+| [`docs/AGENTS_AUTH.md`](docs/AGENTS_AUTH.md) | Agent auth design — what was tried, why it failed, how to validate new credential files |
 | [`docs/VERSIONING.md`](docs/VERSIONING.md) | Tag and release conventions |
 | [`docs/CHANGELOG.md`](docs/CHANGELOG.md) | Full history of changes |
 | [`docs/PRD.md`](docs/PRD.md) | Product requirements and feature list |

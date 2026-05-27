@@ -294,6 +294,12 @@ build_docker_cmd() {
     echo "[sandbox] codex auth mounted read-only" >&2
   fi
 
+  local aliases_file="$CONFIG_DIR/aliases.sh"
+  if [[ -f "$aliases_file" ]]; then
+    cmd+=(-v "${aliases_file}:/home/agent/.bash_aliases:ro")
+    echo "[sandbox] aliases.sh mounted to ~/.bash_aliases" >&2
+  fi
+
   local extra_count i extra_host extra_container extra_ro extra_mode
   extra_count="$(jq -r '(.sandbox.extraMounts // []) | length' "$CONFIG_FILE")"
   for (( i=0; i<extra_count; i++ )); do

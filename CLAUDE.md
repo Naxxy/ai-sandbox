@@ -23,7 +23,7 @@ Use this table to know which file to open first for a given task.
 | Understand what the project is, key features, security model, risks | `docs/PRD.md` |
 | See completed steps, validation records, key decisions, bugs fixed | `docs/CHANGELOG.md` |
 | Learn how to use the tool — harnesses, models, merge modes, mounts, security | `docs/TUTORIAL.md` |
-| Understand devcontainer auth design — what was tried, why it failed, current approach | `docs/CLAUDE_AUTH.md` |
+| Understand agent auth design — what was tried, why it failed, how to validate new credential files | `docs/AGENTS_AUTH.md` |
 | Read the security threat model and Copy Fail / kernel limitations | `docs/SECURITY.md` |
 | Read or modify CLI logic (flag parsing, docker assembly, env resolution, security checks) | `bin/ai-sandbox` |
 | Understand container environment: base image, installed tools, user setup | `src/Dockerfile` |
@@ -54,14 +54,15 @@ ai-sandbox/
 │   └── devcontainer.json         # VS Code dev container config
 ├── docs/
 │   ├── PRD.md                    # product requirements
-│   ├── IMPLEMENTATION_PLAN.md    # remaining work (all complete)
+│   ├── AGENTS_AUTH.md            # agent auth design, investigation, validation guide
 │   ├── CHANGELOG.md              # completed steps + validation records
-│   └── SCRATCHPAD.md             # session state and resume point
+│   └── SECURITY.md               # threat model and kernel limitations
 ├── test/
-│   ├── run_tests.sh              # CLI integration test suite
-│   └── test_devcontainer.sh     # devcontainer static validation
+│   ├── test_cli.sh               # CLI integration test suite
+│   └── test_devcontainer.sh      # devcontainer static validation
 └── .ai-sandbox/
     ├── sandbox.json              # per-project config (committed)
+    ├── aliases.sh                # shell aliases loaded on container start (committed)
     ├── env                       # non-secret env overrides (committed)
     └── secrets.env               # gitignored
 ```
