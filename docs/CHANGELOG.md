@@ -5,6 +5,20 @@
 
 ---
 
+## Rewrite sandbox-tasks.md as complete standalone task document *(2026-05-29)*
+
+Rewrote `docs/sandbox-tasks.md` to cover the outstanding work after reviewing a real workspace (adr-workspace) with a different structure than the template assumed:
+
+- Added current state section: what is already done in the ai-sandbox tool repo vs. what is outstanding in workspace repos.
+- Documented both skill location conventions (root `skills/` at 3-level depth vs. `.claude/skills/` at 4-level depth) and which workspaces use each.
+- Added prerequisite section for local skills that have no git repo yet (the `caveman` skill is this case) — explains how to extract to a git repo before linking.
+- Replaced the generic Step 2 with concrete steps A–D for the adr-workspace: machine setup, submodule removal, XDG symlink creation with correct 3-level relative path, devcontainer.json update. Each step includes verification commands and a commit message template.
+- Added note on nested skills (skills-within-skill-repos): ignore them at the workspace level; the workspace-level symlink for the skill repo already provides the top-level entry point.
+- Added generic guidance section for applying the same migration to other workspaces.
+- Moved completed steps to a Current State summary at the top.
+
+---
+
 ## Document XDG skill sharing in TUTORIAL.md *(2026-05-29)*
 
 Updated `docs/TUTORIAL.md` to document `sandbox.workspacePath` and the XDG skills setup:
