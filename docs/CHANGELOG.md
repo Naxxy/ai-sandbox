@@ -5,6 +5,20 @@
 
 ---
 
+## Add docs/migration.md: XDG symlinks migration guide *(2026-05-29)*
+
+Added `docs/migration.md` — a step-by-step guide for migrating a workspace from
+submodule-based skills to XDG relative symlinks:
+
+- Written from the perspective of a developer inside the old container before rebuild, where skills are dangling symlinks.
+- Step 1: create `~/.local/share/ai-agents/skills/` on the host and clone each git-backed skill.
+- Step 2: handle local-only skills (e.g. `caveman`) — create the XDG directory and recover `SKILL.md` from git history.
+- Step 3: rebuild the devcontainer to activate the depth-matched workspace mount and XDG bind.
+- Step 4: verification commands to confirm `pwd`, symlink resolution, and all skills readable.
+- Covers ongoing skill updates (`git pull` in the XDG repo, no workspace commit needed) and new-machine setup.
+
+---
+
 ## Rewrite sandbox-tasks.md as complete standalone task document *(2026-05-29)*
 
 Rewrote `docs/sandbox-tasks.md` to cover the outstanding work after reviewing a real workspace (adr-workspace) with a different structure than the template assumed:
