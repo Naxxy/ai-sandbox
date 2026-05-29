@@ -5,6 +5,34 @@
 
 ---
 
+## Document XDG skill sharing in TUTORIAL.md *(2026-05-29)*
+
+Updated `docs/TUTORIAL.md` to document `sandbox.workspacePath` and the XDG skills setup:
+
+- Added a `sandbox.workspacePath` section explaining when and why to use the depth-matched path, with an example config snippet showing `extraMounts` for `~/.local/share/ai-agents`.
+- Updated the basic usage text to reflect that the workspace is mounted at the configured `workspacePath` rather than always at `/workspace`.
+- Updated the devcontainer template shown in the tutorial to use the depth-matched `workspaceMount` and `workspaceFolder`, and included the XDG bind mount.
+- Updated the devcontainer verification check from `/workspace` to the depth-matched path.
+
+---
+
+## Add tests: custom workspacePath and extraMounts tilde expansion *(2026-05-29)*
+
+Added two dry-run test cases to `test/test_cli.sh` covering config features required for XDG skill sharing:
+
+- `test_custom_workspace_path`: verifies that a non-default `sandbox.workspacePath` appears correctly in the `docker run` command.
+- `test_extra_mounts_tilde_expansion`: verifies that a `~` prefix in `extraMounts[].host` is expanded to the absolute home path (specifically tests `~/.local/share/ai-agents`).
+
+Also updated four existing E2E and integration tests to use `$CONFIGURED_WORKSPACE_PATH` (read from `sandbox.json` at test setup) instead of hardcoded `/workspace` paths, so the tests remain correct after `sandbox.json` sets a non-default `workspacePath`.
+
+---
+
+## Update sandbox.json: depth-matched workspacePath and XDG skills mount *(2026-05-29)*
+
+Changed `sandbox.workspacePath` from `/workspace` to `/home/agent/projects/ai/ai-sandbox` in `.ai-sandbox/sandbox.json`. Added `~/.local/share/ai-agents` to `extraMounts` so skill symlinks in `.claude/skills/` resolve correctly when the CLI launches a container. Added `-w "$CFG_WORKSPACE_PATH"` to the docker command in `bin/ai-sandbox` so the harness starts in the workspace directory regardless of the Dockerfile `WORKDIR`. See `docs/SKILLS_LINKING.md`.
+
+---
+
 ## Update devcontainer for skills symlink support *(2026-05-29)*
 
 Changed `workspaceMount` target from `/workspace` to `/home/agent/projects/ai/<name>/` in both `.devcontainer/devcontainer.json` and `.devcontainer/devcontainer.template.json`. Added a bind mount for `~/.local/share/ai-agents` in both files. Skills symlinks in `.claude/skills/` now resolve correctly inside devcontainers — the depth-matched workspace path means the four-level relative symlink `../../../../.local/share/ai-agents/skills/<name>` resolves to `/home/agent/.local/share/ai-agents/skills/<name>`. See `docs/SKILLS_LINKING.md`.

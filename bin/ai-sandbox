@@ -246,6 +246,7 @@ build_docker_cmd() {
 
   cmd+=(--name "$container_name")
   cmd+=(-v "${PWD}:${CFG_WORKSPACE_PATH}${mount_opts}")
+  cmd+=(-w "$CFG_WORKSPACE_PATH")
 
   # Mount sandbox.json :ro inside the container when it is accessible via the workspace,
   # preventing any harness from modifying the shared config.

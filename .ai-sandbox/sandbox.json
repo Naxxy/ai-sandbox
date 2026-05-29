@@ -30,9 +30,11 @@
     }
   },
   "sandbox": {
-    "workspacePath": "/workspace",
+    "workspacePath": "/home/agent/projects/ai/ai-sandbox",
     "readonly": false,
     "network": true,
-    "extraMounts": []
+    "extraMounts": [
+      { "host": "~/.local/share/ai-agents", "container": "/home/agent/.local/share/ai-agents", "readonly": false }
+    ]
   }
 }
