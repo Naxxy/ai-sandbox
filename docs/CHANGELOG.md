@@ -5,6 +5,16 @@
 
 ---
 
+## Add SKILLS_LINKING.md and expand sandbox-tasks.md *(2026-05-29)*
+
+Documented the cross-workspace skill sharing design as a permanent context record:
+
+- Added `docs/SKILLS_LINKING.md` — records the full problem (three environments, diverging home paths), all alternatives considered (submodules, monorepo, shell wrappers, absolute symlinks, relative symlinks at `/workspace`), why each was rejected, and the chosen solution (XDG-compliant relative symlinks with depth-matched workspace mounts). Includes the complete path arithmetic, git and VS Code behaviour, and known constraints. Modelled on the same pattern as `docs/AGENTS_AUTH.md`.
+- Rewrote `docs/sandbox-tasks.md` as a standalone implementation task: prerequisites, end-state description, seven ordered steps each with verification commands and a commit message template, a full verification checklist, and a rollback procedure. Self-contained enough for a fresh Claude Code instance to execute without prior context.
+- Updated `CLAUDE.md` file map to include `docs/SKILLS_LINKING.md`.
+
+---
+
 ## Alias file support *(2026-05-27)*
 
 Added `.ai-sandbox/aliases.sh` as a committed, editable file for shell aliases. The CLI now detects this file and mounts it `:ro` into the container at `/home/agent/.bash_aliases`. Debian's default `~/.bashrc` (from `/etc/skel`) already sources `~/.bash_aliases` when it exists, so no Dockerfile changes were needed. The initial entry is `alias ll='ls -al'`. Add further aliases to `.ai-sandbox/aliases.sh` to extend sandbox behaviour.

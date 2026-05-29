@@ -24,6 +24,7 @@ Use this table to know which file to open first for a given task.
 | See completed steps, validation records, key decisions, bugs fixed | `docs/CHANGELOG.md` |
 | Learn how to use the tool — harnesses, models, merge modes, mounts, security | `docs/TUTORIAL.md` |
 | Understand agent auth design — what was tried, why it failed, how to validate new credential files | `docs/AGENTS_AUTH.md` |
+| Understand how skills are shared across workspaces and environments — decisions, path arithmetic, constraints | `docs/SKILLS_LINKING.md` |
 | Read the security threat model and Copy Fail / kernel limitations | `docs/SECURITY.md` |
 | Read or modify CLI logic (flag parsing, docker assembly, env resolution, security checks) | `bin/ai-sandbox` |
 | Understand container environment: base image, installed tools, user setup | `src/Dockerfile` |
@@ -55,6 +56,7 @@ ai-sandbox/
 ├── docs/
 │   ├── PRD.md                    # product requirements
 │   ├── AGENTS_AUTH.md            # agent auth design, investigation, validation guide
+│   ├── SKILLS_LINKING.md         # cross-workspace skill sharing design and decisions
 │   ├── CHANGELOG.md              # completed steps + validation records
 │   └── SECURITY.md               # threat model and kernel limitations
 ├── test/
