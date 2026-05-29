@@ -37,30 +37,6 @@ The full symlink target in both cases is `<depth>.local/share/ai-agents/skills/<
 
 ---
 
-## Prerequisite: local skills without a git repo
-
-Some skills may exist as local workspace content (a directory or single file) with no remote git repository. The `caveman` skill in adr-workspace is this case — it is currently a single file at `skills/caveman/SKILL.md` with no `.git`.
-
-Before such a skill can be linked via XDG, it needs its own git repository. This requires manual user action:
-
-1. Create a new GitHub repository for the skill (e.g. `caveman-skill`)
-2. On Mac:
-   ```bash
-   mkdir -p ~/.local/share/ai-agents/skills/caveman
-   cp ~/projects/ai/adr-workspace/skills/caveman/SKILL.md \
-      ~/.local/share/ai-agents/skills/caveman/SKILL.md
-   cd ~/.local/share/ai-agents/skills/caveman
-   git init && git add SKILL.md
-   git commit -m "Initial commit: caveman skill"
-   git remote add origin <repo-url>
-   git push -u origin main
-   ```
-3. On Pi: `git clone <repo-url> ~/.local/share/ai-agents/skills/caveman`
-
-Only proceed with the workspace migration steps once the skill's XDG directory exists on the current machine.
-
----
-
 ## TASK: Migrate adr-workspace skills to XDG symlinks
 
 **Host workspace path:** `~/projects/ai/adr-workspace/`
@@ -94,14 +70,14 @@ git clone https://github.com/blader/humanizer.git \
     ~/.local/share/ai-agents/skills/humanizer
 git clone https://github.com/Naxxy/workspace-builder-skill.git \
     ~/.local/share/ai-agents/skills/workflow-builder
-# caveman: see the prerequisite section above
+# caveman: populated separately — ensure ~/.local/share/ai-agents/skills/caveman/ exists before verifying
 ```
 
 **Verification:**
 
 ```bash
 ls ~/.local/share/ai-agents/skills/
-# Expected: adr-skill  humanizer  workflow-builder  caveman
+# Expected: adr-skill  humanizer  workflow-builder  (and caveman once populated)
 
 ls ~/.local/share/ai-agents/skills/adr-skill/
 # Expected: SKILL.md  core/  setup/  (or whatever the repo root contains)
@@ -124,7 +100,7 @@ rm -rf .git/modules/skills/adr-skill \
 git rm .gitmodules
 ```
 
-Remove the local caveman directory (content now lives in the XDG repo):
+Remove the local caveman directory (replaced by an XDG symlink in Step C):
 
 ```bash
 rm -rf skills/caveman
@@ -147,8 +123,8 @@ git commit -m "$(cat <<'EOF'
 Remove skill submodules (replaced by XDG symlinks)
 
 Skills are now relative symlinks to ~/.local/share/ai-agents/skills/
-rather than submodule checkouts. caveman local directory removed — its
-content was extracted to a git repo and will be re-added as a symlink.
+rather than submodule checkouts. caveman local directory removed and
+will be re-added as a symlink to the XDG location.
 See docs/SKILLS_LINKING.md in the ai-sandbox repo for the rationale.
 
 Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
@@ -214,7 +190,7 @@ Each skill is now a relative symlink from skills/<name> to
 ~/.local/share/ai-agents/skills/<name>. The three-level relative path
 (../../../) resolves correctly on Mac, Pi, and in the devcontainer
 once the workspace is mounted at /home/agent/projects/ai/adr-workspace/.
-caveman is now linked from its own git repo rather than kept as a local
+caveman is now a symlink to the XDG location rather than a local
 directory. See docs/SKILLS_LINKING.md in the ai-sandbox repo.
 
 Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
