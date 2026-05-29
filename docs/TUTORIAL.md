@@ -51,6 +51,31 @@ your-project/
 
 Run `ai-sandbox` from any directory inside the project. It walks up the tree to find `.ai-sandbox/sandbox.json`.
 
+### `sandbox.workspacePath` — where the workspace is mounted inside the container
+
+`workspacePath` controls the path inside the container where `$PWD` is bind-mounted. The default is `/workspace`.
+
+For workspaces that use Claude Code skills via relative symlinks (see `docs/SKILLS_LINKING.md`), set `workspacePath` to the depth-matched path:
+
+```json
+"sandbox": {
+  "workspacePath": "/home/agent/projects/ai/<workspace-name>"
+}
+```
+
+This ensures the symlinks in `.claude/skills/` resolve correctly inside the container. Also add an `extraMount` for the XDG skills directory so the symlink targets are present:
+
+```json
+"sandbox": {
+  "workspacePath": "/home/agent/projects/ai/<workspace-name>",
+  "extraMounts": [
+    { "host": "~/.local/share/ai-agents", "container": "/home/agent/.local/share/ai-agents", "readonly": false }
+  ]
+}
+```
+
+**Prerequisite:** Clone each skill repo once per machine into `~/.local/share/ai-agents/skills/<skill-name>` before launching the container. See `docs/SKILLS_LINKING.md` for the full setup procedure.
+
 ---
 
 ### 1.1 Per-machine overrides — `sandbox.local.json`
@@ -174,7 +199,7 @@ ai-sandbox aider
 ai-sandbox --model openrouter-free
 ```
 
-The container mounts `$PWD` as `/workspace`. Whatever you can see in your terminal you can see inside the container — nothing more.
+The container mounts `$PWD` at the path configured by `sandbox.workspacePath` (default `/workspace`). Whatever you can see in your terminal you can see inside the container — nothing more.
 
 ---
 
@@ -433,13 +458,14 @@ The template uses `${localWorkspaceFolderBasename}` to name the per-workspace ho
   "runArgs": ["--name", "ai-sandbox-${localWorkspaceFolderBasename}"],
   "image": "ai-sandbox:latest",
   "remoteUser": "agent",
-  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
-  "workspaceFolder": "/workspace",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/home/agent/projects/ai/${localWorkspaceFolderBasename},type=bind",
+  "workspaceFolder": "/home/agent/projects/ai/${localWorkspaceFolderBasename}",
   "mounts": [
     "source=${localWorkspaceFolderBasename}-devcontainer-home,target=/home/agent,type=volume",
     "source=ai-sandbox-shared-claude,target=/home/agent/.claude,type=volume",
     "source=ai-sandbox-shared-codex,target=/home/agent/.codex,type=volume",
-    "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
+    "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind",
+    "source=${localEnv:HOME}/.local/share/ai-agents,target=/home/agent/.local/share/ai-agents,type=bind,consistency=cached"
   ],
   "customizations": {
     "vscode": {
@@ -472,13 +498,13 @@ id
 # Expected: uid=1000(agent) gid=1000(agent) ...
 ```
 
-**2. Confirm you are inside `/workspace`**
+**2. Confirm you are inside your project directory**
 
 ```bash
 pwd
-# Expected: /workspace
+# Expected: /home/agent/projects/ai/<workspace-name>
 
-ls /workspace
+ls
 # Expected: your project files
 ```
 
