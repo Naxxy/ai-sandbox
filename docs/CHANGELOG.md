@@ -5,6 +5,12 @@
 
 ---
 
+## Add Codex settings source file *(2026-05-29)*
+
+Added `src/codex-settings.toml`, a Codex global config source file intended for installation at `/home/agent/.codex/config.toml`. It maps the Claude settings intent into Codex-supported TOML keys: unrestricted execution inside the externally sandboxed container, trusted sandbox workspace paths, and a `CODEX_SANDBOX=true` environment marker. Verified that the file parses as TOML and is accepted by the installed Codex CLI under `--strict-config`.
+
+---
+
 ## Simplify SKILLS_LINKING.md: compress to ~67% of original size *(2026-05-29)*
 
 Rewrote `docs/SKILLS_LINKING.md` for conciseness without removing critical context. Collapsed the five rejected-approaches prose sections into a single table. Merged the "What skills are" section into a two-sentence intro. Compressed path arithmetic to one worked example plus the key invariant statement instead of three full walkthroughs. Trimmed XDG rationale and Git behaviour sections. Result: 134 lines from 199 (33% reduction).

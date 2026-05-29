@@ -1,0 +1,24 @@
+# Codex global settings for ai-sandbox.
+#
+# Install target: /home/agent/.codex/config.toml
+#
+# This mirrors the intent of src/claude-settings.json for Codex. Codex uses
+# TOML config, not Claude Code's JSON permission schema, so file-path read
+# denies from claude-settings.json cannot be represented here. Keep credential
+# files protected with container mounts, read-only policy files, and model
+# instructions.
+
+approval_policy = "never"
+sandbox_mode = "danger-full-access"
+
+[projects."/workspace"]
+trust_level = "trusted"
+
+[projects."/home/agent/projects/ai/ai-sandbox"]
+trust_level = "trusted"
+
+[shell_environment_policy]
+inherit = "core"
+
+[shell_environment_policy.set]
+CODEX_SANDBOX = "true"
