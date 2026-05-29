@@ -8,6 +8,7 @@ CONFIG_DIR="$PROJECT_ROOT/.ai-sandbox"
 PASS=0
 FAIL=0
 STASHED_LOCAL_CONFIG=""
+CONFIGURED_WORKSPACE_PATH=""
 
 pass() {
   echo "PASS  $1"
@@ -37,6 +38,7 @@ check_prerequisites() {
 
 setup() {
   cd "$PROJECT_ROOT" || exit 1
+  CONFIGURED_WORKSPACE_PATH="$(jq -r '.sandbox.workspacePath // "/workspace"' "$CONFIG_DIR/sandbox.json")"
   echo "MY_VAR=hello"       > "$CONFIG_DIR/env"
   echo "SECRET_KEY=hunter2" > "$CONFIG_DIR/secrets.env"
   # Stash sandbox.local.json so all tests run against the baseline sandbox.json
@@ -197,7 +199,7 @@ test_help_and_validation() {
 test_readonly() {
   local out exit_code
 
-  "$CLI" --readonly --shell -- bash -c "touch /workspace/test_rw_file" > /dev/null 2>&1
+  "$CLI" --readonly --shell -- bash -c "touch ${CONFIGURED_WORKSPACE_PATH}/test_rw_file" > /dev/null 2>&1
   exit_code=$?
   if [[ $exit_code -ne 0 ]]; then
     pass "4.1 readonly: write blocked with --readonly"
@@ -205,7 +207,7 @@ test_readonly() {
     fail "4.1 readonly: write blocked with --readonly" "expected non-zero exit, got 0"
   fi
 
-  out=$("$CLI" --shell -- bash -c "touch /workspace/test_rw_file && echo OK && rm /workspace/test_rw_file" 2>/dev/null | tail -1)
+  out=$("$CLI" --shell -- bash -c "touch ${CONFIGURED_WORKSPACE_PATH}/test_rw_file && echo OK && rm ${CONFIGURED_WORKSPACE_PATH}/test_rw_file" 2>/dev/null | tail -1)
   if [[ "$out" == "OK" ]]; then
     pass "4.1 readonly: write succeeds without --readonly"
   else
@@ -230,7 +232,7 @@ test_no_network() {
     fail "4.2 network: outbound works by default" "got: $out"
   fi
 
-  out=$("$CLI" --no-network --shell -- bash -c "echo test > /workspace/net_test.txt && cat /workspace/net_test.txt && rm /workspace/net_test.txt" 2>/dev/null | tail -1)
+  out=$("$CLI" --no-network --shell -- bash -c "echo test > ${CONFIGURED_WORKSPACE_PATH}/net_test.txt && cat ${CONFIGURED_WORKSPACE_PATH}/net_test.txt && rm ${CONFIGURED_WORKSPACE_PATH}/net_test.txt" 2>/dev/null | tail -1)
   if [[ "$out" == "test" ]]; then
     pass "4.2 network: filesystem still works with --no-network"
   else
@@ -591,14 +593,70 @@ test_home_mount_bind() {
   fi
 }
 
+test_custom_workspace_path() {
+  local tmpdir
+  tmpdir="$(mktemp -d)"
+  mkdir "$tmpdir/.ai-sandbox"
+  cat > "$tmpdir/.ai-sandbox/sandbox.json" <<'JSON'
+{
+  "defaultHarness": "shell",
+  "defaultModel": "local-qwen",
+  "harnesses": { "shell": { "command": "bash" } },
+  "models": { "local-qwen": { "provider": "ollama", "model": "test:latest" } },
+  "sandbox": {
+    "workspacePath": "/home/agent/projects/ai/test-workspace",
+    "network": false
+  }
+}
+JSON
+  local output
+  output="$(cd "$tmpdir" && "$CLI" --dry-run 2>/dev/null)"
+  if echo "$output" | grep -q '/home/agent/projects/ai/test-workspace'; then
+    pass "custom workspacePath used in docker command"
+  else
+    fail "custom workspacePath used in docker command" "got: $output"
+  fi
+  rm -rf "$tmpdir"
+}
+
+test_extra_mounts_tilde_expansion() {
+  local tmpdir
+  tmpdir="$(mktemp -d)"
+  mkdir "$tmpdir/.ai-sandbox"
+  cat > "$tmpdir/.ai-sandbox/sandbox.json" <<'JSON'
+{
+  "defaultHarness": "shell",
+  "defaultModel": "local-qwen",
+  "harnesses": { "shell": { "command": "bash" } },
+  "models": { "local-qwen": { "provider": "ollama", "model": "test:latest" } },
+  "sandbox": {
+    "workspacePath": "/workspace",
+    "network": false,
+    "extraMounts": [
+      { "host": "~/.local/share/ai-agents", "container": "/home/agent/.local/share/ai-agents", "readonly": false }
+    ]
+  }
+}
+JSON
+  local output
+  output="$(cd "$tmpdir" && "$CLI" --dry-run 2>/dev/null)"
+  local expected_path="${HOME}/.local/share/ai-agents"
+  if echo "$output" | grep -q "$expected_path"; then
+    pass "tilde in extraMounts.host expanded to $expected_path"
+  else
+    fail "tilde in extraMounts.host expanded to $expected_path" "got: $output"
+  fi
+  rm -rf "$tmpdir"
+}
+
 test_e2e() {
   local out count exit_code
 
   out=$("$CLI" --shell -- bash -c "pwd && whoami" 2>/dev/null)
-  if echo "$out" | grep -q "/workspace" && echo "$out" | grep -q "agent"; then
-    pass "E2E 1: container starts at /workspace as agent"
+  if echo "$out" | grep -q "$CONFIGURED_WORKSPACE_PATH" && echo "$out" | grep -q "agent"; then
+    pass "E2E 1: container starts at configured workspacePath as agent"
   else
-    fail "E2E 1: container starts at /workspace as agent" "got: $out"
+    fail "E2E 1: container starts at configured workspacePath as agent" "got: $out (expected $CONFIGURED_WORKSPACE_PATH)"
   fi
 
   out=$(cli_dry --model local-qwen)
@@ -608,7 +666,7 @@ test_e2e() {
     fail "E2E 2: model override via --model" "got: $out"
   fi
 
-  out=$("$CLI" --readonly --shell -- bash -c "touch /workspace/x 2>&1 || echo BLOCKED" 2>/dev/null | tail -1)
+  out=$("$CLI" --readonly --shell -- bash -c "touch ${CONFIGURED_WORKSPACE_PATH}/x 2>&1 || echo BLOCKED" 2>/dev/null | tail -1)
   if [[ "$out" == "BLOCKED" ]]; then
     pass "E2E 3: readonly enforcement"
   else
@@ -843,6 +901,8 @@ main() {
   test_merge_mode
   test_config_readonly
   test_home_mount_bind
+  test_custom_workspace_path
+  test_extra_mounts_tilde_expansion
   test_claude_settings
   test_credentials
   test_codex_auth
