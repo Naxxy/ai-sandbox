@@ -5,6 +5,12 @@
 
 ---
 
+## Add GPT task document for Codex global rules *(2026-05-29)*
+
+Added `docs/gpt-tasks.md` as a standalone implementation proposal for adding Codex/GPT global sandbox rules. The task maps the existing Claude settings intent to Codex-specific config/rules files, identifies the likely `/home/agent/.codex` installation paths to verify, and lists the CLI, devcontainer, Dockerfile, tests, documentation, and validation work required. No Codex settings implementation was added.
+
+---
+
 ## Add docs/migration.md: XDG symlinks migration guide *(2026-05-29)*
 
 Added `docs/migration.md` — a step-by-step guide for migrating a workspace from
