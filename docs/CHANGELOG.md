@@ -5,6 +5,12 @@
 
 ---
 
+## Simplify SKILLS_LINKING.md: compress to ~67% of original size *(2026-05-29)*
+
+Rewrote `docs/SKILLS_LINKING.md` for conciseness without removing critical context. Collapsed the five rejected-approaches prose sections into a single table. Merged the "What skills are" section into a two-sentence intro. Compressed path arithmetic to one worked example plus the key invariant statement instead of three full walkthroughs. Trimmed XDG rationale and Git behaviour sections. Result: 134 lines from 199 (33% reduction).
+
+---
+
 ## Add architecture-refactor.md: ICM-inspired restructuring proposal *(2026-05-29)*
 
 Added `docs/architecture-refactor.md` — a proposal for restructuring the project to address CLAUDE.md monolith bloat and missing context layers. Adapts the Interpretable Context Methodology's 5-layer model to this repo: L0 (slim CLAUDE.md, ~50 lines), L1 (new CONTEXT.md routing file), L3 (new `_standards/` directory extracting bash rules, security invariants, architecture decisions, provider env vars, and git workflow out of CLAUDE.md), L2 (new `ops/` directory with update protocol, setup guide, and task backlog), and an expanded Makefile with `make test`/`make check`/`make setup`. Includes ASCII before/after filetrees, a before/after context-loading comparison, a change-type table mapping common change types to exactly which files to touch, and a summary table with pros, cons, impact, and phased sequencing recommendation. No files were modified — proposal only.
