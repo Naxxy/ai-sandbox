@@ -5,9 +5,40 @@
 
 ---
 
+## Add architecture-refactor.md: ICM-inspired restructuring proposal *(2026-05-29)*
+
+Added `docs/architecture-refactor.md` — a proposal for restructuring the project to address CLAUDE.md monolith bloat and missing context layers. Adapts the Interpretable Context Methodology's 5-layer model to this repo: L0 (slim CLAUDE.md, ~50 lines), L1 (new CONTEXT.md routing file), L3 (new `_standards/` directory extracting bash rules, security invariants, architecture decisions, provider env vars, and git workflow out of CLAUDE.md), L2 (new `ops/` directory with update protocol, setup guide, and task backlog), and an expanded Makefile with `make test`/`make check`/`make setup`. Includes ASCII before/after filetrees, a before/after context-loading comparison, a change-type table mapping common change types to exactly which files to touch, and a summary table with pros, cons, impact, and phased sequencing recommendation. No files were modified — proposal only.
+
+---
+
 ## Add GPT task document for Codex global rules *(2026-05-29)*
 
 Added `docs/gpt-tasks.md` as a standalone implementation proposal for adding Codex/GPT global sandbox rules. The task maps the existing Claude settings intent to Codex-specific config/rules files, identifies the likely `/home/agent/.codex` installation paths to verify, and lists the CLI, devcontainer, Dockerfile, tests, documentation, and validation work required. No Codex settings implementation was added.
+
+---
+
+## Correct VS Code symlink docs: relative symlinks work correctly *(2026-05-29)*
+
+Updated `docs/SKILLS_LINKING.md` to explicitly confirm that relative symlinks resolve and display correctly in VS Code when their targets exist — VS Code follows relative path arithmetic from the symlink's on-disk location identically to absolute symlinks. The prior text was silent on this, implying uncertainty. Constraint #2 in Known Constraints was tightened: the only issue is dangling pointers (target absent → entry invisible), not the relative path syntax itself.
+
+---
+
+## Fix devcontainer: mount aliases.sh as ~/.bash_aliases *(2026-05-29)*
+
+The devcontainer was missing the bind mount for `.ai-sandbox/aliases.sh`, so `ll` and any other aliases were silently unavailable (`~/.bash_aliases` did not exist). Added `source=${localWorkspaceFolder}/.ai-sandbox/aliases.sh,target=/home/agent/.bash_aliases,type=bind,readonly` to both `devcontainer.json` and `devcontainer.template.json` — matching what the CLI already does at runtime. Added `test_aliases_mount` to `test_devcontainer.sh`. Requires a devcontainer rebuild to take effect.
+
+Also added a sandbox-check note to `CLAUDE.md`: run `whoami` immediately after reading the file; `agent` means you are inside the container and a rebuild is needed to apply devcontainer config changes.
+
+---
+
+## Fix test_devcontainer.sh: update tests for depth-matched workspace mount *(2026-05-29)*
+
+Updated `test/test_devcontainer.sh` to match the current `devcontainer.json` state after the XDG symlinks migration:
+
+- `test_workspace_folder` and `test_workspace_mount_target` now check for `/home/agent/projects/ai/` prefix instead of `/workspace`, reflecting the depth-matched mount introduced in the XDG migration.
+- Removed `test_extension_continue`: `continue.continue` was never in the current extensions list; the test was stale.
+
+All 18 tests now pass.
 
 ---
 

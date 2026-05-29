@@ -2,7 +2,7 @@
 # Static validation of .devcontainer/devcontainer.json.
 # These tests do not launch VS Code or Docker — they verify the config is
 # correct and enforces the same security invariants as the CLI (no host home
-# mounts, non-root user, workspace pinned to /workspace).
+# mounts, non-root user, workspace depth-matched under /home/agent/projects/ai/).
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -60,20 +60,20 @@ test_remote_user_not_root() {
 test_workspace_folder() {
   local folder
   folder=$(jq -r '.workspaceFolder // empty' "$DEVCONTAINER")
-  if [[ "$folder" == "/workspace" ]]; then
-    pass "5.1 config: workspaceFolder is /workspace"
+  if echo "$folder" | grep -q "^/home/agent/projects/ai/"; then
+    pass "5.1 config: workspaceFolder is depth-matched under /home/agent/projects/ai/"
   else
-    fail "5.1 config: workspaceFolder is /workspace" "got: '$folder'"
+    fail "5.1 config: workspaceFolder is depth-matched under /home/agent/projects/ai/" "got: '$folder'"
   fi
 }
 
 test_workspace_mount_target() {
   local mount
   mount=$(jq -r '.workspaceMount // empty' "$DEVCONTAINER")
-  if echo "$mount" | grep -q "target=/workspace"; then
-    pass "5.1 config: workspaceMount targets /workspace"
+  if echo "$mount" | grep -q "target=/home/agent/projects/ai/"; then
+    pass "5.1 config: workspaceMount targets /home/agent/projects/ai/"
   else
-    fail "5.1 config: workspaceMount targets /workspace" "got: '$mount'"
+    fail "5.1 config: workspaceMount targets /home/agent/projects/ai/" "got: '$mount'"
   fi
 }
 
@@ -111,14 +111,15 @@ test_claude_settings_mount_readonly() {
   fi
 }
 
-
-test_extension_continue() {
-  local found
-  found=$(jq -r '.customizations.vscode.extensions[]? // empty' "$DEVCONTAINER" | grep -c "continue.continue")
-  if [[ "$found" -ge 1 ]]; then
-    pass "5.1 extensions: continue.continue listed"
+test_aliases_mount() {
+  local mounts
+  mounts=$(jq -r '.mounts[]? // empty' "$DEVCONTAINER" 2>/dev/null)
+  if echo "$mounts" | grep -q "aliases.sh" \
+    && echo "$mounts" | grep -q "target=/home/agent/.bash_aliases" \
+    && echo "$mounts" | grep -q "readonly"; then
+    pass "aliases: aliases.sh bind-mounted readonly at ~/.bash_aliases"
   else
-    fail "5.1 extensions: continue.continue listed" "not found in extensions array"
+    fail "aliases: aliases.sh bind-mounted readonly at ~/.bash_aliases" "mounts: $mounts"
   fi
 }
 
@@ -216,7 +217,7 @@ main() {
   test_no_host_home_in_workspace_mount
   test_no_host_home_in_mounts_array
   test_claude_settings_mount_readonly
-  test_extension_continue
+  test_aliases_mount
   test_extension_roo
   test_extension_claude_code
   test_extension_chatgpt

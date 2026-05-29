@@ -11,6 +11,7 @@
     "source=ai-sandbox-shared-codex,target=/home/agent/.codex,type=volume",
     "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind",
     "source=${localWorkspaceFolder}/src/claude-settings.json,target=/home/agent/.claude/settings.json,type=bind,readonly",
+    "source=${localWorkspaceFolder}/.ai-sandbox/aliases.sh,target=/home/agent/.bash_aliases,type=bind,readonly",
     "source=${localEnv:HOME}/.local/share/ai-agents,target=/home/agent/.local/share/ai-agents,type=bind,consistency=cached"
   ],
   "customizations": {
