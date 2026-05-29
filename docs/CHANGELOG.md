@@ -11,6 +11,12 @@ Added `docs/architecture-refactor.md` — a proposal for restructuring the proje
 
 ---
 
+## Add workspace issues log *(2026-05-29)*
+
+Added `docs/issues.md` to record operational friction encountered while working in this sandbox: default tool sandbox namespace failures, unreliable `apply_patch` updates under that failure mode, changelog staging difficulty with unrelated dirty entries, and general dirty-worktree commit risk.
+
+---
+
 ## Add GPT task document for Codex global rules *(2026-05-29)*
 
 Added `docs/gpt-tasks.md` as a standalone implementation proposal for adding Codex/GPT global sandbox rules. The task maps the existing Claude settings intent to Codex-specific config/rules files, identifies the likely `/home/agent/.codex` installation paths to verify, and lists the CLI, devcontainer, Dockerfile, tests, documentation, and validation work required. No Codex settings implementation was added.
