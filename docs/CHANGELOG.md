@@ -5,6 +5,12 @@
 
 ---
 
+## Update devcontainer for skills symlink support *(2026-05-29)*
+
+Changed `workspaceMount` target from `/workspace` to `/home/agent/projects/ai/<name>/` in both `.devcontainer/devcontainer.json` and `.devcontainer/devcontainer.template.json`. Added a bind mount for `~/.local/share/ai-agents` in both files. Skills symlinks in `.claude/skills/` now resolve correctly inside devcontainers — the depth-matched workspace path means the four-level relative symlink `../../../../.local/share/ai-agents/skills/<name>` resolves to `/home/agent/.local/share/ai-agents/skills/<name>`. See `docs/SKILLS_LINKING.md`.
+
+---
+
 ## Add SKILLS_LINKING.md and expand sandbox-tasks.md *(2026-05-29)*
 
 Documented the cross-workspace skill sharing design as a permanent context record:
